@@ -109,6 +109,7 @@ app.post("/charge", function (req, res) {
   };
   requestp(options)
     .then((result) => {
+      console.log(result)
       res.jsonp({
         data: result,
         status: "success",

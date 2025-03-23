@@ -19,7 +19,7 @@ export const createUser = catchAsync(async (req, res, next) => {
       password,
       role,
       gender,
-      fcm_token,
+      fcm_token,  
       security_answer,
     } = req.body;
     const findEmail = await User.findOne({ email });
