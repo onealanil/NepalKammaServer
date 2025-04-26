@@ -48,7 +48,7 @@ export const createReview = catchAsync(async (req, res, next) => {
       }
     };
 
-    if(reviewedToUser.fcm_token){
+    if (reviewedToUser.fcm_token) {
       await sendNotification();
     }
 

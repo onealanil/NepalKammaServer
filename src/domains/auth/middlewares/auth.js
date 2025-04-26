@@ -1,5 +1,4 @@
 import jwt from "jsonwebtoken";
-
 import catchAsync from "../../../utils/catchAsync.js";
 import createError from "../../..//utils/createError.js";
 import User from "../../../../models/User.js";
@@ -8,7 +7,6 @@ import Job from "../../../../models/Job.js";
 
 export const protect = catchAsync(async (req, res, next) => {
   const authHeader = req.headers.authorization;
-  console.log("this is authHeader", authHeader);
   if (!(authHeader && authHeader.toLowerCase().startsWith("bearer")))
     throw createError(
       401,

@@ -1,3 +1,8 @@
+/**
+ * @file User.js
+ * @description This file contains the routes for user-related operations such as creating a user, verifying OTP, logging in, editing profile, and more.
+ */
+
 import express from "express";
 import {
   createUser,
@@ -33,19 +38,46 @@ import {
 } from "../domains/auth/middlewares/Multer.js";
 const router = express.Router();
 
+/**
+ * @description User routes for user-related operations such as creating a user, verifying OTP, logging in, editing profile, and more.
+ * @route POST /api/v1/user/signup
+ * @access Public
+ */
 router
   .route("/signup")
   .post(signUpValidation, signupValidationResult, createUser);
-// verify otp route
+
+/**
+ * @description User verification route
+ * @route POST /api/v1/user/verify
+ * @access Public
+ */
 router.route("/verify").post(verifyUser);
-//resend otp route
+
+/**
+ * @description resend OTP route
+ * @route POST /api/v1/user/resend-otp
+ * @access Public
+ */
 router.route("/resend-otp").post(resendOTP);
+
+/**
+ * @description User login route with validation with express-validator
+ * @route POST /api/v1/user/login
+ * @access Public 
+ */
 router.route("/login").post(loginValidation, signupValidationResult, LoginUser);
 
-//forget password
+/**
+ * @description Forget password route
+ * @route PUT /api/v1/user/forgetPassword
+ * @access PUblic 
+ */
 router.route("/forgetPassword").put(forgetPassword);
 
-//logout
+/**
+ * 
+ */
 router.route("/logout").get(protect, logoutUser);
 
 // edit profile
