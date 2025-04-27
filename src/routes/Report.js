@@ -16,3 +16,4 @@ const router = express.Router();
 router.route("/createReport").post(protect, createReport);
 
 export default router;
+        
