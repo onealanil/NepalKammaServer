@@ -1,6 +1,16 @@
+/**
+ * @file BackgroundTask.js
+ * @description This file contains a cron job that runs every minute to update the visibility of jobs that have expired.
+ * It sets the visibility of expired jobs to "private".
+ */
 import Job from "../../models/Job.js";
 import cron from "node-cron";
 
+/**
+ * s@function updateJobVisibility
+ * @description A cron job that runs every minute to update the visibility of jobs that have expired.
+ * It sets the visibility of expired jobs to "private".
+ */
 export async function updateJobVisibility() {
   try {
     cron.schedule("* * * * *", async () => {
