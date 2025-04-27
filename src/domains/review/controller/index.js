@@ -1,5 +1,6 @@
 /**
  * @file User Controller/index.js
+ * @module reviewController
  * @description This file contains the controller functions for user-related operations such as creating a user, verifying OTP, logging in, editing profile, and more.
  * @requires express
  * @requires User model

@@ -1,5 +1,6 @@
 /**
  * @file index.js
+ * @module UserController
  * @description This file contains the controller functions for user-related operations such as creating a user, verifying OTP, logging in, editing profile, and more.
  * @requires catchAsync - A utility function to handle asynchronous errors in Express routes.
  * @requires User - The User model for interacting with the user collection in the database.
