@@ -15,6 +15,14 @@ const onlineUsers = new Map(); // socketId -> {userId, socket}
 
 let io;
 
+/**
+ *
+ * @param userId - The ID of the user to be added
+ * @param socketId - The ID of the socket connection
+ * @description Adds a new user to the online users list and updates their status in the database.
+ * @function addNewUser
+ * @async
+ */
 const addNewUser = async (userId, socketId) => {
   try {
     // Update user status in DB
@@ -41,6 +49,13 @@ const addNewUser = async (userId, socketId) => {
   }
 };
 
+/**
+ *
+ * @param socketId
+ * @description Removes a user from the online users list and updates their status in the database.
+ * @function removeUser
+ * @async
+ */
 const removeUser = async (socketId) => {
   try {
     const userData = onlineUsers.get(socketId);
@@ -63,6 +78,13 @@ const removeUser = async (socketId) => {
   }
 };
 
+/**
+ *
+ * @param {string} userId
+ * @returns {Socket|null}
+ * @description Retrieves the socket instance for a given user ID.
+ * @function getUserSocket
+ */
 const getUserSocket = (userId) => {
   for (const [socketId, userData] of onlineUsers) {
     if (userData.userId === userId) {
@@ -72,6 +94,14 @@ const getUserSocket = (userId) => {
   return null;
 };
 
+/**
+ * 
+ * @param io - Socket.IO instance
+ * @param recipientId - ID of the recipient user
+ * @param notification - Notification object to be sent
+ * @description Emits a notification to a specific user.
+ * @function emitNotification
+ */
 export const emitNotification = (io, recipientId, notification) => {
   const recipient = getUser(recipientId);
   if (recipient && recipient.socketId) {
@@ -86,6 +116,13 @@ export const emitNotification = (io, recipientId, notification) => {
   }
 };
 
+/**
+ * 
+ * @param io - Socket.IO instance
+ * @param recipientId - ID of the recipient user
+ * @description Emits an account deactivation event to a specific user.
+ * @function emitAccountDeactivation
+ */
 export const emitAccountDeactivation = (io, recipientId) => {
   const recipient = getUser(recipientId);
   if (recipient && recipient.socketId) {
@@ -98,7 +135,12 @@ export const emitAccountDeactivation = (io, recipientId) => {
   }
 };
 
-// Socket.IO configuration
+/**
+ * 
+ * @param socketIo - Socket.IO instance
+ * @description Configures the Socket.IO server with authentication and event handling (includes the instance of socket.io).
+ * @function configureSocket
+ */
 const configureSocket = (socketIo) => {
   io = socketIo;
 

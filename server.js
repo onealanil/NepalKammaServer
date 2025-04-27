@@ -42,7 +42,7 @@ if (cluster.isPrimary) {
 
   // Socket.io configuration
   const io = new Server(httpServer, {
-    cors: { 
+    cors: {
       origin: [
         "http://localhost:8081",
         "http://10.0.2.2:8081",
@@ -57,7 +57,7 @@ if (cluster.isPrimary) {
   configureSocket(io);
 
   // Attach io to app for use in routes
-  app.set('io', io);
+  app.set("io", io);
 
   // Start the server
   httpServer.listen(8000, () => {
