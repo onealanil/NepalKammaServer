@@ -1,3 +1,21 @@
+/**
+ * @file index.js
+ * @description This file contains the controller functions for user-related operations such as creating a user, verifying OTP, logging in, editing profile, and more.
+ * @requires catchAsync - A utility function to handle asynchronous errors in Express routes.
+ * @requires User - The User model for interacting with the user collection in the database.
+ * @requires bcrypt - A library for hashing passwords and comparing hashed values.
+ * @requires sendOTPVerificationEmail - A utility function to send OTP verification emails.
+ * @requires UserOTPVerification - The UserOTPVerification model for interacting with the OTP verification collection in the database.
+ * @requires hashPassword - A utility function to hash passwords using bcrypt.
+ * @requires jwt - A library for creating and verifying JSON Web Tokens.
+ * @requires cloudinary - A library for interacting with Cloudinary for image uploads.
+ * @requires getDataUri - A utility function to convert files to data URIs.
+ * @requires getDataUris - A utility function to convert multiple files to data URIs.
+ * @requires Job - The Job model for interacting with the job collection in the database.
+ * @requires Review - The Review model for interacting with the review collection in the database.
+ * @requires express - A web framework for Node.js.
+ */
+
 import catchAsync from "../../../utils/catchAsync.js";
 import User from "../../../../models/User.js";
 import bcrypt from "bcrypt";
@@ -10,8 +28,15 @@ import { getDataUri, getDataUris } from "../../../utils/Features.js";
 import Job from "../../../../models/Job.js";
 import Review from "../../../../models/Review.js";
 
-//create user --> signup
-export const createUser = catchAsync(async (req, res, next) => {
+/**
+ * @function createUser
+ * @param req - The request object containing user data for signup.
+ * @param res - The response object to send the response back to the client.
+ * @description - This function handles user signup by validating the input data, checking for existing users, hashing the password, and sending an OTP verification email.
+ * @returns - A JSON response indicating the success or failure of the signup process.
+ * @throws - If an error occurs during the process, it throws an error with a message.
+ */
+export const createUser = catchAsync(async (req, res) => {
   try {
     const {
       username,
@@ -19,7 +44,7 @@ export const createUser = catchAsync(async (req, res, next) => {
       password,
       role,
       gender,
-      fcm_token,  
+      fcm_token,
       security_answer,
     } = req.body;
     const findEmail = await User.findOne({ email });
@@ -63,8 +88,15 @@ export const createUser = catchAsync(async (req, res, next) => {
   }
 });
 
-// verify OTP
-export const verifyUser = catchAsync(async (req, res, next) => {
+/**
+ * @function verifyUser
+ * * @param req - The request object containing user data for verification.
+ * * @param res - The response object to send the response back to the client.
+ * * @description - This function handles user verification by checking the OTP provided by the user, updating the user's verification status, and deleting the OTP records.
+ * * @returns - A JSON response indicating the success or failure of the verification process.
+ * * @throws - If an error occurs during the process, it throws an error with a message.
+ */
+export const verifyUser = catchAsync(async (req, res) => {
   try {
     const { userId, otp } = req.body;
 
@@ -117,8 +149,15 @@ export const verifyUser = catchAsync(async (req, res, next) => {
   }
 });
 
-// resend OTP
-export const resendOTP = catchAsync(async (req, res, next) => {
+/**
+ * @function resendOTP
+ * * @param req - The request object containing user data for resending OTP.
+ * * @param res - The response object to send the response back to the client.
+ * @description - This function handles resending the OTP verification email to the user by deleting existing OTP records and sending a new OTP.
+ * * @returns - A JSON response indicating the success or failure of the resend process.
+ * * @throws - If an error occurs during the process, it throws an error with a message.
+ */
+export const resendOTP = catchAsync(async (req, res) => {
   try {
     const { userId, email } = req.body;
     if (!userId || !email) {
@@ -149,8 +188,15 @@ export const resendOTP = catchAsync(async (req, res, next) => {
   }
 });
 
-// login user --> login
-export const LoginUser = catchAsync(async (req, res, next) => {
+/**
+ * @function LoginUser
+ * @param req - The request object containing user login data.
+ * @param res - The response object to send the response back to the client.
+ * @description - This function handles user login by validating the input data, checking for existing users, comparing passwords, and generating a JWT token.
+ * @returns - A JSON response containing the login status, token, and user data.
+ * @throws - If an error occurs during the process, it throws an error with a message.
+ */
+export const LoginUser = catchAsync(async (req, res) => {
   const { email, password, fcm_token } = req.body;
   console.log(req.body);
   if (!email || !password) {
@@ -201,8 +247,15 @@ export const LoginUser = catchAsync(async (req, res, next) => {
   }
 });
 
-//forget password
-export const forgetPassword = catchAsync(async (req, res, next) => {
+/**
+ * @function forgetPassword
+ * @param req - The request object containing user data for password reset.
+ * @param res - The response object to send the response back to the client.
+ * @description - This function handles password reset by validating the input data, checking for existing users, comparing security answers, and updating the password.
+ * @returns - A JSON response indicating the success or failure of the password reset process.
+ * @throws - If an error occurs during the process, it throws an error with a message.
+ */
+export const forgetPassword = catchAsync(async (req, res) => {
   try {
     const { email, security_answer, password } = req.body;
     const user = await User.findOne({ email });
@@ -229,8 +282,15 @@ export const forgetPassword = catchAsync(async (req, res, next) => {
   }
 });
 
-//logout user
-export const logoutUser = catchAsync(async (req, res, next) => {
+/**
+ * @function logoutUser
+ * @req - The request object containing user data for logout.
+ * @res - The response object to send the response back to the client.
+ * @description - This function handles user logout by clearing the user's fcm_token and online status.
+ * @returns - A JSON response indicating the success or failure of the logout process.
+ * @throws - If an error occurs during the process, it throws an error with a message.
+ */
+export const logoutUser = catchAsync(async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     user.fcm_token = "";
@@ -242,8 +302,15 @@ export const logoutUser = catchAsync(async (req, res, next) => {
   }
 });
 
-//edit profile
-export const editProfile = catchAsync(async (req, res, next) => {
+/**
+ * @function editProfile
+ * @param req - The request object containing user data for editing profile.'
+ * @param res - The response object to send the response back to the client.
+ * @description - This function handles user profile editing by validating the input data, updating the user's profile, and returning the updated user data.
+ * @returns - A JSON response containing the updated user data without the password field.
+ * @throws - If an error occurs during the process, it throws an error with a message.
+ */
+export const editProfile = catchAsync(async (req, res) => {
   try {
     const id = req.params.id;
     const {
@@ -281,7 +348,15 @@ export const editProfile = catchAsync(async (req, res, next) => {
   }
 });
 
-//update profile picture
+/**
+ *
+ * @function updateProfilePicController
+ * @param req - The request object containing user data for updating profile picture.
+ * @param res - The response object to send the response back to the client.
+ * @description - This function handles user profile picture update by deleting the previous image from Cloudinary, uploading the new image, and updating the user's profile picture in the database.
+ * @returns - A JSON response indicating the success or failure of the profile picture update process.
+ * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
+ */
 export const updateProfilePicController = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -311,7 +386,14 @@ export const updateProfilePicController = async (req, res) => {
   }
 };
 
-// update phone number
+/**
+ * @function updatePhoneNumber
+ * @param req - The request object containing user data for updating phone number.
+ * @param res - The response object to send the response back to the client.
+ * @description - This function handles user phone number update by checking for existing users with the same phone number, updating the user's phone number, and returning a success message.
+ * @returns - The updated user data without the password filed and updated phone number.
+ * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
+ */
 export const updatePhoneNumber = async (req, res) => {
   try {
     const { phone } = req.body;
@@ -342,8 +424,16 @@ export const updatePhoneNumber = async (req, res) => {
   }
 };
 
-// upload document
-export const uploadDocuments = catchAsync(async (req, res, next) => {
+/**
+ * @function uploadDocuments
+ * @param req - The request object containing user data for uploading documents.
+ * @param res - The response object to send the response back to the client.
+ * @description - This function handles user document upload by validating the input data, uploading the documents to Cloudinary, and updating the user's documents in the database.
+ * @returns - A JSON response indicating the success or failure of the document upload process.
+ * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
+ *
+ */
+export const uploadDocuments = catchAsync(async (req, res) => {
   try {
     const files = getDataUris(req.files);
 
@@ -370,8 +460,15 @@ export const uploadDocuments = catchAsync(async (req, res, next) => {
   }
 });
 
-//get single user --> job seeker
-export const getSingleUser = catchAsync(async (req, res, next) => {
+/**
+ * @function getSingleUser
+ * @param req - The request object containing user data for getting a single user.
+ * @param res - The response object to send the response back to the client.
+ * @description - This function handles getting a single user by their ID and fetching all jobs posted by that user.
+ * * @returns - A JSON response containing the user data and their jobs.
+ * * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
+ */
+export const getSingleUser = catchAsync(async (req, res) => {
   try {
     const userId = req.params.id;
 
@@ -390,8 +487,15 @@ export const getSingleUser = catchAsync(async (req, res, next) => {
   }
 });
 
-// get single user --> job provider
-export const getSingleUserProvider = catchAsync(async (req, res, next) => {
+/**
+ * @function getSingleUserProvider
+ * @param req - The request object containing user data for getting a single job provider.
+ * * @param res - The response object to send the response back to the client.
+ * * @description - This function handles getting a single job provider by their ID and fetching all jobs posted by that user.
+ * * @returns - A JSON response containing the user data and their jobs.
+ * * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
+ */
+export const getSingleUserProvider = catchAsync(async (req, res) => {
   try {
     const userId = req.params.id;
 
@@ -435,7 +539,16 @@ export const getSingleUserProvider = catchAsync(async (req, res, next) => {
 //     res.status(500).json({ message: "Failed to get job seekers" });
 //   }
 // });
-export const getAllJobSeekers = catchAsync(async (req, res, next) => {
+
+/**
+ * @function getAllJobSeekers
+ * @param req - The request object containing user data for getting all job seekers.
+ * * @param res - The response object to send the response back to the client.
+ * @description - This function handles getting all job seekers by validating the input data, checking for existing users, and returning the user data.
+ * * @returns - A JSON response containing the user data and their jobs.
+ * * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
+ */
+export const getAllJobSeekers = catchAsync(async (req, res) => {
   try {
     const searchQuery = req.query.search;
     let query = { role: "job_seeker" };
@@ -477,8 +590,15 @@ export const getAllJobSeekers = catchAsync(async (req, res, next) => {
   }
 });
 
-// get all nearby users who are job seekers
-export const nearByJobSeekers = catchAsync(async (req, res, next) => {
+/**
+ * @function nearByJobSeekers
+ * @param req - The request object containing user data for getting nearby job seekers.
+ * * @param res - The response object to send the response back to the client.
+ * * @description - This function handles getting nearby job seekers by validating the input data, checking for existing users, and returning the user data.
+ * * @returns - A JSON response containing the nearby job seekers.
+ * * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
+ */
+export const nearByJobSeekers = catchAsync(async (req, res) => {
   try {
     const { latitude, longitude } = req.params;
 
@@ -508,8 +628,15 @@ export const nearByJobSeekers = catchAsync(async (req, res, next) => {
   }
 });
 
-//search user by username and who role is job_seeker
-export const searchUser = catchAsync(async (req, res, next) => {
+/**
+ * @function searchUser
+ * @param req - The request object containing user data for searching users.
+ * @param res - The response object to send the response back to the client.
+ * @description - This function handles searching for users by their username and returning the matching user data.
+ * @returns - A JSON response containing the user data which matches the search query.
+ * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
+ */
+export const searchUser = catchAsync(async (req, res) => {
   try {
     const { username } = req.params;
 
@@ -525,8 +652,15 @@ export const searchUser = catchAsync(async (req, res, next) => {
   }
 });
 
-// count jobs posted by job providers
-export const countAll = catchAsync(async (req, res, next) => {
+/**
+ * @function countAll
+ * @param req - The request object containing user data for counting all jobs posted by a job provider.
+ * @param res - The response object to send the response back to the client.
+ * @description - This function handles counting all jobs posted by a job provider by validating the input data, checking for existing users, and returning the count of jobs.
+ * @returns - A JSON response containing the total number of jobs posted by the job provider and the number of jobs in progress.
+ * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
+ */
+export const countAll = catchAsync(async (req, res) => {
   try {
     const { jobProviderId } = req.params;
     const jobProvider = await User.findById(jobProviderId);
@@ -548,8 +682,15 @@ export const countAll = catchAsync(async (req, res, next) => {
   }
 });
 
-//save and unsave post job
-export const saveJob = catchAsync(async (req, res, next) => {
+/**
+ * @function saveJob
+ * @param req - The request object containing user data for saving a job.
+ * @param res - The response object to send the response back to the client.
+ * @description - This function handles saving a job by validating the input data, checking for existing users, and updating the user's saved jobs.
+ * @returns - A JSON response indicating the success or failure of the save process.
+ * @throws - If an error occurs during the process, it sends a 422 status code with an error message.
+ */
+export const saveJob = catchAsync(async (req, res) => {
   try {
     const postId = req.params.id;
     const myId = req.user._id;
@@ -580,8 +721,15 @@ export const saveJob = catchAsync(async (req, res, next) => {
   }
 });
 
-//unsaved post
-export const unsaveJob = catchAsync(async (req, res, next) => {
+/**
+ * @function unsaveJob
+ * @param req - The request object containing user data for unsaving a job.
+ * @param res - The response object to send the response back to the client.
+ * @description - This function handles unsaving a job by validating the input data, checking for existing users, and updating the user's saved jobs.
+ * @returns - A JSON response indicating the success or failure of the unsave process.
+ * @throws - If an error occurs during the process, it sends a 422 status code with an error message.
+ */
+export const unsaveJob = catchAsync(async (req, res) => {
   try {
     const postId = req.params.id;
     const myId = req.user._id;
@@ -605,8 +753,15 @@ export const unsaveJob = catchAsync(async (req, res, next) => {
   }
 });
 
-//get all saved jobs
-export const getSavedJobs = catchAsync(async (req, res, next) => {
+/**
+ * @function getSavedJobs
+ * @param req - The request object containing user data for getting saved jobs.
+ * @param res - The response object to send the response back to the client.
+ * @description - This function handles getting saved jobs by validating the input data, checking for existing users, and returning the user's saved jobs.
+ * @returns - A JSON response containing the user's saved jobs.
+ * @throws - If an error occurs during the process, it sends a 422 status code with an error message.
+ */
+export const getSavedJobs = catchAsync(async (req, res) => {
   try {
     const myId = req.user._id;
     const currentUser = await User.findById(myId)
@@ -630,6 +785,14 @@ export const getSavedJobs = catchAsync(async (req, res, next) => {
   }
 });
 
+/**
+ * @function getTopRatedJobProviders
+ * @param req - The request object containing user data for getting top-rated job providers.
+ * @param res - The response object to send the response back to the client.
+ * @description - This function handles getting top-rated job providers by validating the input data, checking for existing users, and returning the top-rated job providers.
+ * @returns - A JSON response containing the top-rated job providers.
+ * @throws - If an error occurs during the process, it sends a 422 status code with an error message.
+ */
 export const getTopRatedJobProviders = catchAsync(async (req, res) => {
   try {
     const topRatedJobProviders = await User.aggregate([
