@@ -64,66 +64,134 @@ router.route("/resend-otp").post(resendOTP);
 /**
  * @description User login route with validation with express-validator
  * @route POST /api/v1/user/login
- * @access Public 
+ * @access Public
  */
 router.route("/login").post(loginValidation, signupValidationResult, LoginUser);
 
 /**
  * @description Forget password route
  * @route PUT /api/v1/user/forgetPassword
- * @access PUblic 
+ * @access PUblic
  */
 router.route("/forgetPassword").put(forgetPassword);
 
 /**
- * 
+ * @description Logout user route
+ * @route GET /api/v1/user/logout
+ * @access Private
  */
 router.route("/logout").get(protect, logoutUser);
 
-// edit profile
+/**
+ * @description Resend OTP route
+ * @route POST /api/v1/user/resend-otp
+ * @access Private
+ * @param {id} id - User ID
+ *
+ */
 router.route(`/edit-profile/:id`).put(protect, editProfile);
 
-// update profile pic
+/**
+ * * @description Update user profile picture route
+ * * @route PUT /api/v1/user/update-picture
+ * * @access Private
+ */
 router
   .route("/update-picture")
   .put(protect, singleUpload, updateProfilePicController);
 
-// update phone number
+/**
+ * * @description Update user phone number route
+ * * @route PUT /api/v1/user/update-phone
+ * * @access Private
+ */
 router.route("/update-phone").put(protect, updatePhoneNumber);
 
-//update documents
+/**
+ * * @description Upload documents route
+ * * @route POST /api/v1/user/upload-document
+ * * @access Private
+ */
 router.route("/upload-document").post(protect, multipleUpload, uploadDocuments);
 
-//get single user
+/**
+ * * @description Get single user route
+ * * @route GET /api/v1/user/:id
+ * * @access Private
+ * @param {id} id - User ID
+ */
 router.route("/user/:id").get(protect, getSingleUser);
 
-//get single user --> provider
+/**
+ * * @description Get single user provider route
+ * * @route GET /api/v1/user/provider/:id
+ * * @access Private
+ * @param {id} id - User ID
+ */
 router.route("/user/provider/:id").get(protect, getSingleUserProvider);
 
-//get all job seekers
+/**
+ * * @description Get all job seekers route
+ * * @route GET /api/v1/user/job-seeker
+ * * @access Private
+ */
 router.route("/job-seeker").get(protect, getAllJobSeekers);
 
-//near by job seekers
+/**
+ * * @description Get nearby job seekers route
+ * * @route GET /api/v1/user/getNearbyJobSeeker/:latitude/:longitude
+ * * @access Private
+ * @param {latitude} latitude - Latitude of the user
+ * @param {longitude} longitude - Longitude of the user
+ */
 router
   .route(`/getNearbyJobSeeker/:latitude/:longitude`)
   .get(protect, nearByJobSeekers);
 
-//search user by username
+/**
+ * * @description Search user route
+ * * @route GET /api/v1/user/search-user/:username
+ * * @access Private
+ * @param {username} username - Username to search for
+ */
 router.route(`/search-user/:username`).get(protect, searchUser);
 
-//count jobs posted by job providers
+/**
+ * * @description Count all job posted by a job provider
+ * * @route GET /api/v1/user/count-job-posted/:jobProviderId
+ * * @access Private
+ * @param {jobProviderId} jobProviderId - Job provider ID to count jobs for job provider
+ */
 router
   .route(`/count-job-posted/:jobProviderId`)
   .get(protect, permission(["job_provider"]), countAll);
 
-//save jobs
+/**
+ * * @description Save job route
+ * * @route PUT /api/v1/user/save-job/:id
+ * * @access Private
+ * @param {id} id - Job ID to save
+ */
 router.route(`/save-job/:id`).put(protect, saveJob);
-//unsave jobs
+/**
+ * * @description Unsave job route
+ * * @route PUT /api/v1/user/unsave-job/:id
+ * * @access Private
+ * @param {id} id - Job ID to unsave
+ */
 router.route(`/unsave-job/:id`).put(protect, unsaveJob);
-//get saved jobs
+/**
+ * * @description Get saved jobs route
+ * * @route GET /api/v1/user/saved-jobs
+ * * @access Private
+ */
 router.route(`/saved-jobs`).get(protect, getSavedJobs);
 
-//get top rated job provider
+/**
+ * * @description Get top rated job providers route
+ * * @route GET /api/v1/user/top-rated-job-provider
+ * * @access Private
+ */
 router.route(`/top-rated-job-provider`).get(protect, getTopRatedJobProviders);
 
 export default router;

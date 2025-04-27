@@ -1,3 +1,11 @@
+/**
+ * @file socketHandler.js
+ * @description This file contains the Socket.IO configuration and event handling for real-time communication in the application.
+ * @requires express
+ * @requires socket.io
+ * @requires dotenv
+ */
+
 import MessageModel from "./models/Message.js";
 import User from "./models/User.js";
 import jwt from "jsonwebtoken";
