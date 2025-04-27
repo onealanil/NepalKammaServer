@@ -1,3 +1,16 @@
+/**
+ * @file Jobs/index.js
+ * @description This file contains the controller functions for the job module.
+ * @module JobsController
+ * @requires express - The Express framework
+ * @requires Job - The Job model
+ * @requires User - The User model
+ * @requires NotificationModel - The Notification model
+ * @requires catchAsync - A utility function to handle asynchronous errors
+ * @requires recommendJobs - A helper function for job recommendations
+ * @requires firebase - Firebase services for notifications
+ */
+
 import catchAsync from "../../../utils/catchAsync.js";
 import Job from "../../../../models/Job.js";
 import recommendJobs from "../helper/JobRecommendation.js";
@@ -6,7 +19,15 @@ import User from "../../../../models/User.js";
 import { emitNotification } from "../../../../socketHandler.js";
 import firebase from "../../../firebase/index.js";
 
-//create job
+/**
+ * @function createJob
+ * @description Creates a new job posting and sends notifications to relevant job seekers.
+ * @param {Object} req - The request object containing job details and user information.
+ * @param {Object} res - The response object to send the response.
+ * @returns - A JSON response indicating success or failure of job creation.
+ * @throws - If an error occurs during the process, a JSON response with an error message is sent.
+ * @async
+ */
 export const createJob = catchAsync(async (req, res, next) => {
   try {
     const {
@@ -192,7 +213,15 @@ export const createJob = catchAsync(async (req, res, next) => {
   }
 });
 
-// get job
+/**
+ * @function getJob
+ * @description Retrieves a paginated list of public pending jobs.
+ * @param {Object} req - The request object containing pagination parameters.
+ * @param {Object} res - The response object to send the response.
+ * @returns - A JSON response containing the job list and pagination details.
+ * @throws - If an error occurs during the process, a JSON response with an error message is sent.
+ * @async
+ */
 export const getJob = catchAsync(async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -227,7 +256,15 @@ export const getJob = catchAsync(async (req, res, next) => {
   }
 });
 
-// near by
+/**
+ * @function nearBy
+ * @description Retrieves nearby jobs based on geographic coordinates.
+ * @param {Object} req - The request object containing latitude and longitude.
+ * @param {Object} res - The response object to send the response.
+ * @returns - A JSON response containing nearby jobs.
+ * @throws - If an error occurs during the process, a JSON response with an error message is sent.
+ * @async
+ */
 export const nearBy = catchAsync(async (req, res, next) => {
   try {
     const { latitude, longitude } = req.params;
@@ -263,7 +300,15 @@ export const nearBy = catchAsync(async (req, res, next) => {
   }
 });
 
-//recommendation system
+/**
+ * @function recommendationJobs
+ * @description Retrieves job recommendations for a specific user.
+ * @param {Object} req - The request object containing user ID.
+ * @param {Object} res - The response object to send the response.
+ * @returns - A JSON response containing recommended jobs.
+ * @throws - If an error occurs during the process, a JSON response with an error message is sent.
+ * @async
+ */
 export const recommendationJobs = async (req, res, next) => {
   try {
     const id = req.user._id;
@@ -290,7 +335,15 @@ export const recommendationJobs = async (req, res, next) => {
   }
 };
 
-//search job
+/**
+ * @function searchJob
+ * @description Searches for jobs based on various criteria including text, category, location, and sorting options.
+ * @param {Object} req - The request object containing search parameters.
+ * @param {Object} res - The response object to send the response.
+ * @returns - A JSON response containing matching jobs and pagination details.
+ * @throws - If an error occurs during the process, a JSON response with an error message is sent.
+ * @async
+ */
 export const searchJob = catchAsync(async (req, res, next) => {
   try {
     const {
@@ -381,7 +434,15 @@ function escapeRegex(text) {
   return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
 }
 
-//update job status
+/**
+ * @function updateJobStatus
+ * @description Updates the status of a job (e.g., pending, assigned, completed).
+ * @param {Object} req - The request object containing job ID and new status.
+ * @param {Object} res - The response object to send the response.
+ * @returns - A JSON response indicating success or failure of the update.
+ * @throws - If an error occurs during the process, a JSON response with an error message is sent.
+ * @async
+ */
 export const updateJobStatus = catchAsync(async (req, res, next) => {
   try {
     const { jobId } = req.params;
@@ -402,7 +463,15 @@ export const updateJobStatus = catchAsync(async (req, res, next) => {
   }
 });
 
-//extract all jobs which is posted by me and status is completed
+/**
+ * @function completedJobs
+ * @description Retrieves all completed jobs posted by the current user.
+ * @param {Object} req - The request object containing user information.
+ * @param {Object} res - The response object to send the response.
+ * @returns - A JSON response containing completed jobs.
+ * @throws - If an error occurs during the process, a JSON response with an error message is sent.
+ * @async
+ */
 export const completedJobs = catchAsync(async (req, res, next) => {
   try {
     // Find jobs for the current page using skip and limit
@@ -433,8 +502,15 @@ export const completedJobs = catchAsync(async (req, res, next) => {
   }
 });
 
-
-//delete jobs
+/**
+ * @function deleteJobs
+ * @description Deletes a specific job posting.
+ * @param {Object} req - The request object containing job ID.
+ * @param {Object} res - The response object to send the response.
+ * @returns - A JSON response indicating success or failure of deletion.
+ * @throws - If an error occurs during the process, a JSON response with an error message is sent.
+ * @async
+ */
 export const deleteJobs = catchAsync(async (req, res, next) => {
   try {
     const { jobId } = req.params;
@@ -450,4 +526,4 @@ export const deleteJobs = catchAsync(async (req, res, next) => {
     console.error(err);
     res.status(500).json({ message: "Failed to delete job" });
   }
-  });
+});

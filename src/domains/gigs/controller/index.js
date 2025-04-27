@@ -1,11 +1,31 @@
+/**
+ * @file Gigs/index.js
+ * @description This file contains the controller functions for the gig module.
+ * @module GigsController
+ * @requires express - The Express framework
+ * @requires Gig - The Gig model
+ * @requires User - The User model
+ * @requires getDataUris - A utility function to get data URIs from files
+ * @requires catchAsync - A utility function to handle asynchronous errors
+ * @requires cloudinary - A cloud storage service for images
+ * @requires multipleUpload - A middleware for handling file uploads
+ */
 import Gig from "../../../../models/Gig.js";
 import User from "../../../../models/User.js";
 import { getDataUris } from "../../../utils/Features.js";
 import catchAsync from "../../../utils/catchAsync.js";
 import cloudinary from "cloudinary";
 
-// upload images
-export const uploadImages = catchAsync(async (req, res, next) => {
+/**
+ * @function uploadImages
+ * @description Upload images to Cloudinary and save the image data to the database.
+ * @param {Object} req - The request object containing the files to be uploaded.
+ * @param {Object} res - The response object to send the response.
+ * @returns - A JSON response with a success message and the image data.
+ * @throws - If an error occurs during the upload process, a JSON response with an error message is sent.
+ * @async
+ */
+export const uploadImages = catchAsync(async (req, res) => {
   try {
     const files = getDataUris(req.files);
 
@@ -32,8 +52,16 @@ export const uploadImages = catchAsync(async (req, res, next) => {
   }
 });
 
-//create gig or update gig with data
-export const createGig = catchAsync(async (req, res, next) => {
+/**
+ * @function createGig
+ * @description Create a new gig and save it to the database.
+ * @param {Object} req - The request object containing the gig data.
+ * @param {Object} res - The response object to send the response.
+ * @returns - A JSON response with a success message and the created gig data.
+ * @throws - If an error occurs during the creation process, a JSON response with an error message is sent.
+ * @async
+ */
+export const createGig = catchAsync(async (req, res) => {
   try {
     const gig_id = req.params.id;
     const gig = await Gig.findById(gig_id);
@@ -61,12 +89,23 @@ export const createGig = catchAsync(async (req, res, next) => {
   }
 });
 
-// get Gig
-export const getGig = catchAsync(async (req, res, next) => {
+/**
+ * @function getGig
+ * @description Get all gigs from the database.
+ * @param {Object} req - The request object.
+ * @param {Object} res - The response object to send the response.
+ * @returns - A JSON response with a success message and the list of gigs.
+ * @throws - If an error occurs during the retrieval process, a JSON response with an error message is sent.
+ * @async
+ */
+export const getGig = catchAsync(async (req, res) => {
   try {
     const gig = await Gig.find()
       .sort({ createdAt: -1 })
-      .populate("postedBy", "username email profilePic onlineStatus can_review skills address location")
+      .populate(
+        "postedBy",
+        "username email profilePic onlineStatus can_review skills address location"
+      )
       .exec();
     res.status(200).json({ gig });
   } catch (err) {
@@ -75,8 +114,16 @@ export const getGig = catchAsync(async (req, res, next) => {
   }
 });
 
-//get near by gig
-export const nearByGig = catchAsync(async (req, res, next) => {
+/**
+ * @function nearByGig
+ * @description Get nearby gigs based on latitude and longitude.
+ * @param {Object} req - The request object containing the latitude and longitude.
+ * @param {Object} res - The response object to send the response.
+ * @returns - A JSON response with a success message and the list of nearby gigs.
+ * @throws - If an error occurs during the retrieval process, a JSON response with an error message is sent.
+ * @async
+ */
+export const nearByGig = catchAsync(async (req, res) => {
   try {
     const { latitude, longitude } = req.params;
     const nearByUser = await User.aggregate([
@@ -97,7 +144,10 @@ export const nearByGig = catchAsync(async (req, res, next) => {
     const userIds = nearByUser.map((user) => user._id);
     const nearByGigs = await Gig.find({ postedBy: { $in: userIds } })
       .sort({ createdAt: -1 })
-      .populate("postedBy", "username email profilePic onlineStatus can_review skills address location")
+      .populate(
+        "postedBy",
+        "username email profilePic onlineStatus can_review skills address location"
+      )
       .exec();
 
     res.status(200).json({ nearByGigs });
@@ -107,7 +157,16 @@ export const nearByGig = catchAsync(async (req, res, next) => {
   }
 });
 
-// search gig
+/**
+ * @function searchGig
+ * @description Search for gigs based on various criteria.
+ * @param {Object} req - The request object containing the search criteria.
+ * @param {Object} res - The response object to send the response.
+ * @param {Function} next - The next middleware function.
+ * @returns - A JSON response with a success message and the list of gigs matching the search criteria.
+ * @throws - If an error occurs during the search process, a JSON response with an error message is sent.
+ * @async
+ */
 export const searchGig = catchAsync(async (req, res, next) => {
   try {
     const {
@@ -162,7 +221,10 @@ export const searchGig = catchAsync(async (req, res, next) => {
     // Execute the search query
     const gigs = await Gig.find(query)
       .sort(sort)
-      .populate("postedBy", "username email profilePic onlineStatus can_review skills address location")
+      .populate(
+        "postedBy",
+        "username email profilePic onlineStatus can_review skills address location"
+      )
       .skip((page - 1) * limit)
       .limit(limit);
 
@@ -180,13 +242,24 @@ export const searchGig = catchAsync(async (req, res, next) => {
   }
 });
 
-//get single user gigs, by postedBy id
-export const getSingleUserGigs = catchAsync(async (req, res, next) => {
+/**
+ * @function getSingleUserGigs
+ * @description Get all gigs posted by a single user.
+ * @param {Object} req - The request object containing the user ID.
+ * @param {Object} res - The response object to send the response.
+ * @returns - A JSON response with a success message and the list of gigs posted by the user.
+ * @throws - If an error occurs during the retrieval process, a JSON response with an error message is sent.
+ * @async
+ */
+export const getSingleUserGigs = catchAsync(async (req, res) => {
   try {
     const { id } = req.params;
     const userGigs = await Gig.find({ postedBy: id })
       .sort({ createdAt: -1 })
-      .populate("postedBy", "username email profilePic onlineStatus can_review skills address location")
+      .populate(
+        "postedBy",
+        "username email profilePic onlineStatus can_review skills address location"
+      )
       .exec();
     res.status(200).json({ userGigs });
   } catch (err) {
