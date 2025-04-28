@@ -17,9 +17,7 @@ import createError from "../../utils/createError.js";
 export const checkAuthentication = catchAsync(async (req, res) => {
   const user = await User.findById(req.user).select("-password");
   if (!user) throw createError(401, "User not found");
-
-  console.log("hitted", req.user);
-
+  
   // Check if user's account is active
   if (user.userAccountStatus !== "Active") {
     throw createError(

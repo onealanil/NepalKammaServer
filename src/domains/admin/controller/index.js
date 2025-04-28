@@ -466,14 +466,12 @@ export const sendPushNotification = catchAsync(async (req, res, next) => {
           // Remove the unregistered token from the user
           user.fcm_token = null;
           await user.save();
-          console.log(`Removed unregistered token for user ${user.id}`);
         }
       }
     };
 
     users.forEach((user) => {
       if (user.fcm_token) {
-        console.log(`Sending notification to user ${user.id}`);
         sendPushNotification(user);
       }
     });

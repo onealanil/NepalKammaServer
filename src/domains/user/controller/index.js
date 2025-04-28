@@ -199,7 +199,6 @@ export const resendOTP = catchAsync(async (req, res) => {
  */
 export const LoginUser = catchAsync(async (req, res) => {
   const { email, password, fcm_token } = req.body;
-  console.log(req.body);
   if (!email || !password) {
     return res.status(422).json({ message: "Something went wrong" });
   }

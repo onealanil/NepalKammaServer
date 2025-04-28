@@ -21,46 +21,76 @@ import app from "./app.js";
 /**
  * Clustering server.js
  */
-const numCpus = os.cpus().length;
+// const numCpus = os.cpus().length;
 
-if (cluster.isPrimary) {
-  console.log(`Primary ${process.pid} is running`);
+// if (cluster.isPrimary) {
+//   console.log(`Primary ${process.pid} is running`);
 
-  // Fork workers
-  for (let i = 0; i < numCpus; i++) {
-    cluster.fork();
-  }
+//   // Fork workers
+//   for (let i = 0; i < numCpus; i++) {
+//     cluster.fork();
+//   }
 
-  cluster.on("exit", (worker, code, signal) => {
-    console.log(`Worker ${worker.process.pid} died`);
-    // Restart the worker
-    cluster.fork();
-  });
-} else {
-  // Worker process - this is where your Express app runs
-  const httpServer = createServer(app);
+//   cluster.on("exit", (worker, code, signal) => {
+//     console.log(`Worker ${worker.process.pid} died`);
+//     // Restart the worker
+//     cluster.fork();
+//   });
+// } else {
+//   // Worker process - this is where your Express app runs
+//   const httpServer = createServer(app);
 
-  // Socket.io configuration
-  const io = new Server(httpServer, {
-    cors: {
-      origin: [
-        "http://localhost:8081",
-        "http://10.0.2.2:8081",
-        "http://192.168.20.68:8081",
-      ],
-      methods: ["GET", "POST"],
-      credentials: true,
-    },
-  });
+//   // Socket.io configuration
+//   const io = new Server(httpServer, {
+//     cors: {
+//       origin: [
+//         "http://localhost:8081",
+//         "http://10.0.2.2:8081",
+//         "http://192.168.20.68:8081",
+//       ],
+//       methods: ["GET", "POST"],
+//       credentials: true,
+//     },
+//   });
 
-  // Configure socket.io
-  configureSocket(io);
+//   // Configure socket.io
+//   configureSocket(io);
 
-  // Attach io to app for use in routes
-  app.set("io", io);
+//   // Attach io to app for use in routes
+//   app.set("io", io);
 
-  // Start the server
-  httpServer.listen(8000, () => {
-    console.log(`Worker ${process.pid} started on port 8000`);
-  });
-}
+//   // Start the server
+//   httpServer.listen(8000, () => {
+//     console.log(`Worker ${process.pid} started on port 8000`);
+//   });
+// }
+/*********************
+ * Just for launching app -> not handled more users
+ * 
+ * 
+ */
+const httpServer = createServer(app);
+
+// Socket.io configuration
+const io = new Server(httpServer, {
+  cors: {
+    origin: [
+      "http://localhost:8081",
+      "http://10.0.2.2:8081",
+      "http://192.168.20.68:8081",
+    ],
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
+
+// Configure socket.io
+configureSocket(io);
+
+// Attach io to app for use in routes
+app.set("io", io);
+
+// Start the server
+httpServer.listen(8000, () => {
+  console.log(`Worker ${process.pid} started on port 8000`);
+});
