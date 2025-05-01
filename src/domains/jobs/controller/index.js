@@ -18,6 +18,7 @@ import NotificationModel from "../../../../models/Notification.js";
 import User from "../../../../models/User.js";
 import { emitNotification } from "../../../../socketHandler.js";
 import firebase from "../../../firebase/index.js";
+import { getOrSetCache, clearCache } from "../../../utils/cacheService.js";
 
 /**
  * @function createJob
@@ -122,7 +123,6 @@ export const createJob = catchAsync(async (req, res, next) => {
           },
         });
       } catch (err) {
-
         console.error(err);
       }
     };
@@ -206,6 +206,12 @@ export const createJob = catchAsync(async (req, res, next) => {
       }
     });
 
+    clearCache([
+      'jobs_1_5', // First page of jobs
+      `nearby_${latitude}_${longitude}`,
+      // Add any other cache keys that might be affected
+    ]);
+
     res.status(201).json({ message: "Successfully! created" });
   } catch (err) {
     console.error(err);
@@ -230,26 +236,34 @@ export const getJob = catchAsync(async (req, res, next) => {
     // Calculate the index of the first item for the current page
     const startIndex = (page - 1) * limit;
 
-    // Find jobs for the current page using skip and limit
-    const job = await Job.find({ visibility: "public", job_status: "Pending" })
-      .sort({ createdAt: -1 })
-      .populate("postedBy", "username email profilePic onlineStatus can_review")
-      .skip(startIndex)
-      .limit(limit)
-      .exec();
+    // Create a unique cache key based on the request parameters
+    const cacheKey = `jobs_${page}_${limit}`;
 
-    // Get total number of jobs
-    const totalJobs = await Job.countDocuments();
+    const result = await getOrSetCache(cacheKey, async () => {
+      const job = await Job.find({
+        visibility: "public",
+        job_status: "Pending",
+      })
+        .sort({ createdAt: -1 })
+        .populate(
+          "postedBy",
+          "username email profilePic profilePic onlineStatus can_review"
+        )
+        .skip(startIndex)
+        .limit(limit)
+        .exec();
 
-    // Calculate total pages
-    const totalPages = Math.ceil(totalJobs / limit);
+      const totalJobs = await Job.countDocuments({
+        visibility: "public",
+        job_status: "Pending",
+      });
 
-    res.status(200).json({
-      job,
-      totalPages,
-      totalJobs,
-      currentPage: page,
+      const totalPages = Math.ceil(totalJobs / limit);
+
+      return { job, totalPages, totalJobs, currentPage: page };
     });
+
+    res.status(200).json(result);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to get job" });
@@ -268,32 +282,41 @@ export const getJob = catchAsync(async (req, res, next) => {
 export const nearBy = catchAsync(async (req, res, next) => {
   try {
     const { latitude, longitude } = req.params;
+    const cacheKey = `nearby_${latitude}_${longitude}`;
 
-    const nearBy = await Job.aggregate([
-      {
-        $geoNear: {
-          near: {
-            type: "Point",
-            coordinates: [parseFloat(longitude), parseFloat(latitude)],
+    const result = await getOrSetCache(cacheKey, async () => {
+      const nearBy = await Job.aggregate([
+        {
+          $geoNear: {
+            near: {
+              type: "Point",
+              coordinates: [parseFloat(longitude), parseFloat(latitude)],
+            },
+            key: "address.coordinates",
+            maxDistance: parseFloat(10000),
+            distanceField: "dist.calculated",
+            spherical: true,
           },
-          key: "address.coordinates",
-          maxDistance: parseFloat(10000),
-          distanceField: "dist.calculated",
-          spherical: true,
         },
-      },
-      {
-        $match: { visibility: "public", job_status: "Pending" },
-      },
-    ]).exec();
-    // Get the ids of the documents you want to populate
-    const jobIds = nearBy.map((job) => job._id);
-    const populatedJobs = await Job.find({ _id: { $in: jobIds } })
-      .sort({ createdAt: -1 })
-      .populate("postedBy", "username email profilePic onlineStatus can_review")
-      .limit(8)
-      .exec();
-    res.status(200).json({ nearBy: populatedJobs });
+        {
+          $match: { visibility: "public", job_status: "Pending" },
+        },
+      ]).exec();
+
+      const jobIds = nearBy.map((job) => job._id);
+      const populatedJobs = await Job.find({ _id: { $in: jobIds } })
+        .sort({ createdAt: -1 })
+        .populate(
+          "postedBy",
+          "username email profilePic onlineStatus can_review"
+        )
+        .limit(8)
+        .exec();
+
+      return { nearBy: populatedJobs };
+    });
+
+    res.status(200).json(result);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to get job" });
@@ -309,26 +332,33 @@ export const nearBy = catchAsync(async (req, res, next) => {
  * @throws - If an error occurs during the process, a JSON response with an error message is sent.
  * @async
  */
-export const recommendationJobs = async (req, res, next) => {
+export const recommendationJobs = async (req, res) => {
   try {
     const id = req.user._id;
     if (!id) return res.status(400).json({ message: "id is required" });
-    const recommendJobsList = await recommendJobs(id);
 
-    // Get the ids of the documents you want to populate
-    const jobIds = recommendJobsList.map((job) => job._id);
+    const cacheKey = `recommendations_${id}`;
 
-    // Populate the referenced fields using find()
-    const populatedJobs = await Job.find({
-      _id: { $in: jobIds },
-      visibility: "public",
-      job_status: "Pending",
-    })
-      .sort({ createdAt: -1 })
-      .populate("postedBy", "username email profilePic onlineStatus can_review")
-      .exec();
+    const result = await getOrSetCache(cacheKey, async () => {
+      const recommendJobsList = await recommendJobs(id);
+      const jobIds = recommendJobsList.map((job) => job._id);
 
-    res.status(200).json({ recommendJobsList: populatedJobs });
+      const populatedJobs = await Job.find({
+        _id: { $in: jobIds },
+        visibility: "public",
+        job_status: "Pending",
+      })
+        .sort({ createdAt: -1 })
+        .populate(
+          "postedBy",
+          "username email profilePic onlineStatus can_review"
+        )
+        .exec();
+
+      return { recommendJobsList: populatedJobs };
+    });
+
+    res.status(200).json(result);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to get job" });
@@ -359,71 +389,82 @@ export const searchJob = catchAsync(async (req, res, next) => {
 
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 5;
-    let query = { visibility: "public", job_status: "Pending" };
 
-    if (text) {
-      const regex = new RegExp(text, "i");
-      query.$or = [
-        { title: { $regex: regex } },
-        { job_description: { $regex: regex } },
-      ];
-    }
+    // Create a unique cache key based on all search parameters
+    const cacheKey = `search_${text}_${category}_${lng}_${lat}_${distance}_${sortByRating}_${sortByPriceHighToLow}_${sortByPriceLowToHigh}_${page}_${limit}`;
 
-    if (category === "" || category === "All") {
-      // No need to add category to the query
-    } else {
-      const existingCategory = await Job.findOne({ category });
-      if (existingCategory) {
-        query.category = category;
-      } else {
-        // Return an empty array if the selected category does not exist
-        return res.status(200).json({
-          success: true,
-          job: [],
-          totalJobs: 0,
-          currentPage: page,
-          totalPages: 0,
-        });
+    const result = await getOrSetCache(cacheKey, async () => {
+      let query = { visibility: "public", job_status: "Pending" };
+
+      if (text) {
+        const regex = new RegExp(text, "i");
+        query.$or = [
+          { title: { $regex: regex } },
+          { job_description: { $regex: regex } },
+        ];
       }
-    }
 
-    // Define the sort order
-    let sort = {};
-    if (sortByRating === "true") {
-      sort.rating = -1;
-    } else if (sortByPriceHighToLow === "true") {
-      sort.price = -1;
-    } else if (sortByPriceLowToHigh === "true") {
-      sort.price = 1;
-    } else {
-      sort.createdAt = -1;
-    }
+      if (category === "" || category === "All") {
+        // No need to add category to the query
+      } else {
+        const existingCategory = await Job.findOne({ category });
+        if (existingCategory) {
+          query.category = category;
+        } else {
+          // Return an empty array if the selected category does not exist
+          return {
+            success: true,
+            job: [],
+            totalJobs: 0,
+            currentPage: page,
+            totalPages: 0,
+          };
+        }
+      }
 
-    if (lng && lat && distance > 0) {
-      const radius = parseFloat(distance) / 6378.1;
-      query.address = {
-        $geoWithin: {
-          $centerSphere: [[parseFloat(lng), parseFloat(lat)], radius],
-        },
+      // Define the sort order
+      let sort = {};
+      if (sortByRating === "true") {
+        sort.rating = -1;
+      } else if (sortByPriceHighToLow === "true") {
+        sort.price = -1;
+      } else if (sortByPriceLowToHigh === "true") {
+        sort.price = 1;
+      } else {
+        sort.createdAt = -1;
+      }
+
+      if (lng && lat && distance > 0) {
+        const radius = parseFloat(distance) / 6378.1;
+        query.address = {
+          $geoWithin: {
+            $centerSphere: [[parseFloat(lng), parseFloat(lat)], radius],
+          },
+        };
+      }
+
+      // Execute the search query
+      const jobs = await Job.find(query)
+        .sort(sort)
+        .populate(
+          "postedBy",
+          "username email profilePic onlineStatus can_review"
+        )
+        .skip((page - 1) * limit)
+        .limit(limit);
+
+      const totalJobs = await Job.countDocuments(query);
+
+      return {
+        success: true,
+        job: jobs,
+        totalJobs,
+        currentPage: page,
+        totalPages: Math.ceil(totalJobs / limit),
       };
-    }
-
-    // Execute the search query
-    const jobs = await Job.find(query)
-      .sort(sort)
-      .populate("postedBy", "username email profilePic onlineStatus can_review")
-      .skip((page - 1) * limit)
-      .limit(limit);
-
-    const totalJobs = await Job.countDocuments(query);
-
-    res.status(200).json({
-      success: true,
-      job: jobs,
-      totalJobs,
-      currentPage: page,
-      totalPages: Math.ceil(totalJobs / limit),
     });
+
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
@@ -456,6 +497,12 @@ export const updateJobStatus = catchAsync(async (req, res, next) => {
     job.job_status = job_status;
     job.assignedTo = assignedTo;
     const userJobs = await job.save();
+
+    clearCache([
+      'jobs_1_5', // First page of jobs
+      `nearby_${job.address.coordinates[1]}_${job.address.coordinates[0]}`,
+      // Add any other cache keys that might be affected
+    ]);
 
     res.status(200).json({ message: "Job status updated", userJobs });
   } catch (error) {
@@ -518,11 +565,16 @@ export const deleteJobs = catchAsync(async (req, res, next) => {
     if (!job) {
       return res.status(404).json({ message: "Job not found" });
     }
-    await Job
-      .findByIdAndDelete(jobId);
+    await Job.findByIdAndDelete(jobId);
+
+    // Clear relevant caches when job is deleted
+    clearCache([
+      'jobs_1_5', // First page of jobs
+      `nearby_${coordinates[1]}_${coordinates[0]}`,
+      // Add any other cache keys that might be affected
+    ]);
     res.status(200).json({ message: "Job deleted" });
-  }
-  catch (err) {
+  } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to delete job" });
   }
