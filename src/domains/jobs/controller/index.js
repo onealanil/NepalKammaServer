@@ -29,7 +29,7 @@ import { getOrSetCache, clearCache } from "../../../utils/cacheService.js";
  * @throws - If an error occurs during the process, a JSON response with an error message is sent.
  * @async
  */
-export const createJob = catchAsync(async (req, res, next) => {
+export const createJob = catchAsync(async (req, res) => {
   try {
     const {
       title,
@@ -228,7 +228,7 @@ export const createJob = catchAsync(async (req, res, next) => {
  * @throws - If an error occurs during the process, a JSON response with an error message is sent.
  * @async
  */
-export const getJob = catchAsync(async (req, res, next) => {
+export const getJob = catchAsync(async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 5;
@@ -247,11 +247,11 @@ export const getJob = catchAsync(async (req, res, next) => {
         .sort({ createdAt: -1 })
         .populate(
           "postedBy",
-          "username email profilePic profilePic onlineStatus can_review"
+          "username email profilePic onlineStatus can_review"
         )
         .skip(startIndex)
         .limit(limit)
-        .exec();
+        .exec()
 
       const totalJobs = await Job.countDocuments({
         visibility: "public",
@@ -279,7 +279,7 @@ export const getJob = catchAsync(async (req, res, next) => {
  * @throws - If an error occurs during the process, a JSON response with an error message is sent.
  * @async
  */
-export const nearBy = catchAsync(async (req, res, next) => {
+export const nearBy = catchAsync(async (req, res) => {
   try {
     const { latitude, longitude } = req.params;
     const cacheKey = `nearby_${latitude}_${longitude}`;

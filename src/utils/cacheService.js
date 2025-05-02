@@ -21,8 +21,12 @@ export const getOrSetCache = async (key, fetchFunction, ttl) => {
 
   console.log(`Cache miss for key: ${key}`);
   const freshData = await fetchFunction();
-  cache.set(key, freshData, ttl || 600); // Default 10 minutes
-  return freshData;
+  
+  // Convert Mongoose documents to plain objects before caching
+  const dataToCache = JSON.parse(JSON.stringify(freshData));
+  
+  cache.set(key, dataToCache, ttl || 600);
+  return freshData; // Return the original data (not stringified) to the route handler
 };
 
 /**

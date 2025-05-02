@@ -15,7 +15,7 @@ import User from "../../../../models/User.js";
 import { getDataUris } from "../../../utils/Features.js";
 import catchAsync from "../../../utils/catchAsync.js";
 import cloudinary from "cloudinary";
-
+import { getOrSetCache, clearCache } from "../../../utils/cacheService.js";
 /**
  * @function uploadImages
  * @description Upload images to Cloudinary and save the image data to the database.
@@ -68,6 +68,7 @@ export const createGig = catchAsync(async (req, res) => {
     if (!gig) {
       return res.status(404).json({ message: "Gig not found" });
     }
+    
     const { title, gig_description, price, category } = req.body;
     const gigData = await Gig.findByIdAndUpdate(
       gig_id,
@@ -81,13 +82,20 @@ export const createGig = catchAsync(async (req, res) => {
       { new: true }
     );
 
+    // Clear relevant caches after creating/updating a gig
+    clearCache([
+      'gigs_all_1_10', // First page of all gigs
+      `user_gigs_${req.user._id}`, // User's gigs
+      // Add other cache keys that might be affected
+    ]);
+
     res.status(201).json({ message: "Successfully! created", gigData });
   } catch (err) {
     console.error(err);
-    // Respond with error message
     res.status(500).json({ message: "Failed to create gig" });
   }
 });
+
 
 /**
  * @function getGig
@@ -100,19 +108,38 @@ export const createGig = catchAsync(async (req, res) => {
  */
 export const getGig = catchAsync(async (req, res) => {
   try {
-    const gig = await Gig.find()
-      .sort({ createdAt: -1 })
-      .populate(
-        "postedBy",
-        "username email profilePic onlineStatus can_review skills address location"
-      )
-      .exec();
-    res.status(200).json({ gig });
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const cacheKey = `gigs_all_${page}_${limit}`;
+
+    const result = await getOrSetCache(cacheKey, async () => {
+      const gigs = await Gig.find()
+        .sort({ createdAt: -1 })
+        .populate(
+          "postedBy",
+          "username email profilePic onlineStatus can_review skills address location"
+        )
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .exec();
+      
+      const totalGigs = await Gig.countDocuments();
+      
+      return {
+        gig: gigs,
+        totalGigs,
+        totalPages: Math.ceil(totalGigs / limit),
+        currentPage: page
+      };
+    });
+
+    res.status(200).json(result);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to get gig" });
   }
 });
+
 
 /**
  * @function nearByGig
@@ -126,31 +153,37 @@ export const getGig = catchAsync(async (req, res) => {
 export const nearByGig = catchAsync(async (req, res) => {
   try {
     const { latitude, longitude } = req.params;
-    const nearByUser = await User.aggregate([
-      {
-        $geoNear: {
-          near: {
-            type: "Point",
-            coordinates: [parseFloat(longitude), parseFloat(latitude)],
+    const cacheKey = `gigs_nearby_${latitude}_${longitude}`;
+
+    const result = await getOrSetCache(cacheKey, async () => {
+      const nearByUser = await User.aggregate([
+        {
+          $geoNear: {
+            near: {
+              type: "Point",
+              coordinates: [parseFloat(longitude), parseFloat(latitude)],
+            },
+            key: "address.coordinates",
+            maxDistance: parseFloat(10000),
+            distanceField: "dist.calculated",
+            spherical: true,
           },
-          key: "address.coordinates",
-          maxDistance: parseFloat(10000),
-          distanceField: "dist.calculated",
-          spherical: true,
         },
-      },
-    ]).exec();
+      ]).exec();
 
-    const userIds = nearByUser.map((user) => user._id);
-    const nearByGigs = await Gig.find({ postedBy: { $in: userIds } })
-      .sort({ createdAt: -1 })
-      .populate(
-        "postedBy",
-        "username email profilePic onlineStatus can_review skills address location"
-      )
-      .exec();
+      const userIds = nearByUser.map((user) => user._id);
+      const nearByGigs = await Gig.find({ postedBy: { $in: userIds } })
+        .sort({ createdAt: -1 })
+        .populate(
+          "postedBy",
+          "username email profilePic onlineStatus can_review skills address location"
+        )
+        .exec();
 
-    res.status(200).json({ nearByGigs });
+      return { nearByGigs };
+    }, 300); // 5 minute TTL for location-based gigs
+
+    res.status(200).json(result);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to get near by gig" });
@@ -178,69 +211,73 @@ export const searchGig = catchAsync(async (req, res, next) => {
       sortByRating,
       sortByPriceHighToLow,
       sortByPriceLowToHigh,
+      page = 1,
+      limit = 5
     } = req.query;
 
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 5;
-    let query = {};
+    // Create a unique cache key based on all search parameters
+    const cacheKey = `gigs_search_${text}_${category}_${lng}_${lat}_${distance}_${
+      sortByRating
+    }_${sortByPriceHighToLow}_${sortByPriceLowToHigh}_${page}_${limit}`;
 
-    if (text) {
-      const regex = new RegExp(text, "i");
-      query.$or = [
-        { title: { $regex: regex } },
-        { gig_description: { $regex: regex } },
-      ];
-    }
+    const result = await getOrSetCache(cacheKey, async () => {
+      let query = {};
 
-    const existingCategory = await Gig.findOne({ category });
-    if (category && existingCategory) {
-      query.category = category;
-    }
+      if (text) {
+        const regex = new RegExp(text, "i");
+        query.$or = [
+          { title: { $regex: regex } },
+          { gig_description: { $regex: regex } },
+        ];
+      }
 
-    // Define the sort order
-    let sort = {};
-    if (sortByRating === "true") {
-      sort.rating = -1;
-    } else if (sortByPriceHighToLow === "true") {
-      sort.price = -1;
-    } else if (sortByPriceLowToHigh === "true") {
-      sort.price = 1;
-    } else {
-      sort.createdAt = -1;
-    }
+      if (category) {
+        const existingCategory = await Gig.findOne({ category });
+        if (existingCategory) {
+          query.category = category;
+        } else {
+          return {
+            success: true,
+            gig: [],
+            totalGigs: 0,
+            currentPage: page,
+            totalPages: 0,
+          };
+        }
+      }
 
-    // if (lng && lat && distance > 0) {
-    //   const radius = parseFloat(distance) / 6378.1;
-    //   query.address = {
-    //     $geoWithin: {
-    //       $centerSphere: [[parseFloat(lng), parseFloat(lat)], radius],
-    //     },
-    //   };
-    // }
+      let sort = {};
+      if (sortByRating === "true") sort.rating = -1;
+      else if (sortByPriceHighToLow === "true") sort.price = -1;
+      else if (sortByPriceLowToHigh === "true") sort.price = 1;
+      else sort.createdAt = -1;
 
-    // Execute the search query
-    const gigs = await Gig.find(query)
-      .sort(sort)
-      .populate(
-        "postedBy",
-        "username email profilePic onlineStatus can_review skills address location"
-      )
-      .skip((page - 1) * limit)
-      .limit(limit);
+      const gigs = await Gig.find(query)
+        .sort(sort)
+        .populate(
+          "postedBy",
+          "username email profilePic onlineStatus can_review skills address location"
+        )
+        .skip((page - 1) * limit)
+        .limit(limit);
 
-    const totalGigs = await Gig.countDocuments(query);
+      const totalGigs = await Gig.countDocuments(query);
 
-    res.status(200).json({
-      success: true,
-      gig: gigs,
-      totalGigs,
-      currentPage: page,
-      totalPages: Math.ceil(totalGigs / limit),
-    });
+      return {
+        success: true,
+        gig: gigs,
+        totalGigs,
+        currentPage: page,
+        totalPages: Math.ceil(totalGigs / limit),
+      };
+    }, 180); // 3 minute TTL for search results
+
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
 });
+
 
 /**
  * @function getSingleUserGigs
@@ -254,14 +291,20 @@ export const searchGig = catchAsync(async (req, res, next) => {
 export const getSingleUserGigs = catchAsync(async (req, res) => {
   try {
     const { id } = req.params;
-    const userGigs = await Gig.find({ postedBy: id })
-      .sort({ createdAt: -1 })
-      .populate(
-        "postedBy",
-        "username email profilePic onlineStatus can_review skills address location"
-      )
-      .exec();
-    res.status(200).json({ userGigs });
+    const cacheKey = `user_gigs_${id}`;
+
+    const result = await getOrSetCache(cacheKey, async () => {
+      const userGigs = await Gig.find({ postedBy: id })
+        .sort({ createdAt: -1 })
+        .populate(
+          "postedBy",
+          "username email profilePic onlineStatus can_review skills address location"
+        )
+        .exec();
+      return { userGigs };
+    }, 600); // 10 minute TTL for user gigs
+
+    res.status(200).json(result);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to get user gigs" });
