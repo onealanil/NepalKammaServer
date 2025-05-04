@@ -207,7 +207,7 @@ export const createJob = catchAsync(async (req, res) => {
     });
 
     clearCache([
-      'jobs_1_5', // First page of jobs
+      "jobs_1_5", // First page of jobs
       `nearby_${latitude}_${longitude}`,
       // Add any other cache keys that might be affected
     ]);
@@ -251,7 +251,7 @@ export const getJob = catchAsync(async (req, res) => {
         )
         .skip(startIndex)
         .limit(limit)
-        .exec()
+        .exec();
 
       const totalJobs = await Job.countDocuments({
         visibility: "public",
@@ -499,7 +499,7 @@ export const updateJobStatus = catchAsync(async (req, res, next) => {
     const userJobs = await job.save();
 
     clearCache([
-      'jobs_1_5', // First page of jobs
+      "jobs_1_5", // First page of jobs
       `nearby_${job.address.coordinates[1]}_${job.address.coordinates[0]}`,
       // Add any other cache keys that might be affected
     ]);
@@ -562,6 +562,17 @@ export const deleteJobs = catchAsync(async (req, res, next) => {
   try {
     const { jobId } = req.params;
     const job = await Job.findById(jobId);
+
+    if (
+      job.status === "In_Progress" &&
+      job.status === "Completed" &&
+      job.status === "Cancelled"
+    ) {
+      return res
+        .status(400)
+        .json({ message: "You can't delete this job, it is already assigned" });
+    }
+
     if (!job) {
       return res.status(404).json({ message: "Job not found" });
     }
@@ -572,7 +583,7 @@ export const deleteJobs = catchAsync(async (req, res, next) => {
 
     // Clear relevant caches when job is deleted
     clearCache([
-      'jobs_1_5', // First page of jobs
+      "jobs_1_5", // First page of jobs
       `nearby_${coordinates[1]}_${coordinates[0]}`,
       // Add any other cache keys that might be affected
     ]);
