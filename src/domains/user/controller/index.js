@@ -138,6 +138,9 @@ export const verifyUser = catchAsync(async (req, res) => {
     await User.findByIdAndUpdate(userId, { isVerified: true });
     await UserOTPVerification.deleteMany({ userId });
 
+    const user = await User.findById(userId).select("-password -documents");
+    // await sendVerifiedEmail(user?.email, user?.username, user?._id, res);
+
     return res.json({
       status: "success",
       message: "OTP verified successfully",

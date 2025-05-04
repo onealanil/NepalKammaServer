@@ -460,6 +460,7 @@ export const sendPushNotification = catchAsync(async (req, res, next) => {
             body: message,
           },
         });
+        console.log("Notification sent successfully to user:", user._id);
       } catch (err) {
         console.error(err);
         if (err.code === "messaging/registration-token-not-registered") {

@@ -567,6 +567,9 @@ export const deleteJobs = catchAsync(async (req, res, next) => {
     }
     await Job.findByIdAndDelete(jobId);
 
+    // Get coordinates from the job before deleting
+    const coordinates = job.address.coordinates;
+
     // Clear relevant caches when job is deleted
     clearCache([
       'jobs_1_5', // First page of jobs
