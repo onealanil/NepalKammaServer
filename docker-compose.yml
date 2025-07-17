@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: nepalkamma-mongodb
+    restart: unless-stopped
+    environment:
+    ports:
+      - "27020:27017"  # Changed to 27020
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
+    networks:
+      - nepalkamma-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Node.js Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nepalkamma-app
+    restart: unless-stopped
+    ports:
+      - "8001:8000"  # Changed to 8001
+    environment:
+      NODE_ENV: development
+      MONGO_CONNECTION: ${MONGO_CONNECTION}
+      CLOUDINARY_NAME: ${CLOUDINARY_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_SECRET: ${CLOUDINARY_SECRET}
+      TEST_SECRET_KEY: ${TEST_SECRET_KEY}
+    depends_on:
+      - mongodb
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - nepalkamma-network
+    command: npm run nodemon
+
+volumes:
+  mongodb_data:
+
+networks:
+  nepalkamma-network:
+    driver: bridge

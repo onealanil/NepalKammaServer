@@ -36,7 +36,6 @@ import { dirname } from "path";
 import { fileURLToPath } from "url";
 import connectMongo from "./config/connection.js";
 import { updateJobVisibility } from "./src/utils/BackgroundTask.js";
-import firebase from "./src/firebase/index.js";
 
 // Routes
 import user from "./src/routes/User.js";
