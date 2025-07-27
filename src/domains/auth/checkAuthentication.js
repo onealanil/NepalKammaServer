@@ -17,7 +17,7 @@ import createError from "../../utils/createError.js";
 export const checkAuthentication = catchAsync(async (req, res) => {
   const user = await User.findById(req.user).select("-password");
   if (!user) throw createError(401, "User not found");
-  
+
   // Check if user's account is active
   if (user.userAccountStatus !== "Active") {
     throw createError(
@@ -31,3 +31,29 @@ export const checkAuthentication = catchAsync(async (req, res) => {
     user,
   });
 });
+
+/**
+ * @function refreshToken
+ * @description This function is used to refresh the token.
+ * @param req - Request object
+ * @param res - Response object
+ */
+export const refreshToken = catchAsync(async (req, res) => {
+  const token = req.cookies.refreshToken;
+
+  if (!token) {
+    return res.status(401).json({ message: 'No token found' });
+  }
+
+  jwt.verify(token, process.env.REFRESH_TOKEN_SECRET, (err, payload) => {
+    if (err) return res.status(403).json({ message: 'Invalid token' });
+
+    const newAccessToken = jwt.sign(
+      { userId: payload.userId },
+      process.env.ACCESS_TOKEN_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    res.status(200).json({ accessToken: newAccessToken });
+  });
+})

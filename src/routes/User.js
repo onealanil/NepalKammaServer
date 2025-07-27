@@ -80,7 +80,7 @@ router.route("/forgetPassword").put(forgetPassword);
  * @route GET /api/v1/user/logout
  * @access Private
  */
-router.route("/logout").get(protect, logoutUser);
+router.route("/logout").get(logoutUser);
 
 /**
  * @description Resend OTP route

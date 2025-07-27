@@ -224,9 +224,10 @@ export const LoginUser = catchAsync(async (req, res) => {
         const refreshToken = generateRefreshToken(findEmail._id);
 
         findEmail.save();
-        const userWithoutPassword = {
-          ...findEmail._doc,
-          password: undefined,
+        const userInfo = {
+          id: findEmail._id,
+          role: findEmail.role,
+          username: findEmail.username,
         };
 
         res.cookie("refreshToken", refreshToken, {
@@ -241,8 +242,7 @@ export const LoginUser = catchAsync(async (req, res) => {
           status: "success",
           message: "Successfully, logged in",
           accessToken,
-          refreshToken,
-          user: userWithoutPassword,
+          user: userInfo,
         });
       } else {
         return res
@@ -299,19 +299,38 @@ export const forgetPassword = catchAsync(async (req, res) => {
  * @throws - If an error occurs during the process, it throws an error with a message.
  */
 export const logoutUser = catchAsync(async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id);
-    user.fcm_token = "";
-    user.onlineStatus = false;
-    await user.save();
+  const refreshToken = req.cookies.refreshToken;
 
-    // Clear refresh token cookie
-    res.clearCookie("refreshToken");
-
-    res.status(200).json({ message: "Successfully, logged out" });
-  } catch (err) {
-    res.status(500).json({ message: "Failed to logout" });
+  if (!refreshToken) {
+    return res.status(401).json({ message: "Refresh token missing" });
   }
+
+  let decoded;
+  try {
+    decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+  } catch (err) {
+    return res.status(403).json({ message: "Invalid refresh token" });
+  }
+
+  const user = await User.findById(decoded.userId);
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  // Optional: clear FCM token and mark offline
+  user.fcm_token = "";
+  user.onlineStatus = false;
+  await user.save();
+
+  // Clear the refresh token cookie
+  res.clearCookie("refreshToken", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/",
+  });
+
+  return res.status(200).json({ message: "Logged out successfully" });
 });
 
 /**
