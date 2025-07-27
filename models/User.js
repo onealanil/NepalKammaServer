@@ -90,6 +90,10 @@ const UserInfoSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    refreshToken: {
+      type: String,
+      default: null,
+    },
     isDocumentVerified: {
       type: String,
       enum: ["Pending", "verified", "is_not_verified"],

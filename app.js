@@ -31,6 +31,7 @@ import bodyParser from "body-parser";
 import cors from "cors";
 import cloudinary from "cloudinary";
 import requestp from "request-promise";
+import cookieParser from "cookie-parser";
 import path from "path";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
@@ -62,6 +63,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(cors());
 app.use(bodyParser.json());
+app.use(cookieParser());
 
 // Serve static files
 app.use(express.static(path.join(__dirname, "public")));

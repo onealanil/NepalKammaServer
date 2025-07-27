@@ -14,7 +14,7 @@ export const protect = catchAsync(async (req, res, next) => {
     );
   const token = authHeader.split(" ")[1];
   try {
-    const decoded = jwt.verify(token, process.env.SECRET_KEY);
+    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
     req.user = await User.findById(decoded.userId);
     next();
   } catch (err) {

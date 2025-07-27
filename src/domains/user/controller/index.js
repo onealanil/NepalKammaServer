@@ -28,6 +28,7 @@ import cloudinary from "cloudinary";
 import { getDataUri, getDataUris } from "../../../utils/Features.js";
 import Job from "../../../../models/Job.js";
 import Review from "../../../../models/Review.js";
+import { generateAccessToken, generateRefreshToken } from "../../../utils/jwt.js";
 
 /**
  * @function createUser
@@ -201,7 +202,7 @@ export const resendOTP = catchAsync(async (req, res) => {
  * @throws - If an error occurs during the process, it throws an error with a message.
  */
 export const LoginUser = catchAsync(async (req, res) => {
-  const { email, password, fcm_token } = req.body;
+  const { email, password } = req.body;
   if (!email || !password) {
     return res.status(422).json({ message: "Something went wrong" });
   }
@@ -217,28 +218,32 @@ export const LoginUser = catchAsync(async (req, res) => {
             message: "Your account is inactive. Please contact the admin.",
           });
         }
-        jwt.sign(
-          { userId: findEmail._id },
-          process.env.SECRET_KEY,
-          { expiresIn: 86400 },
-          (err, token) => {
-            if (err) {
-              return res.status(404).json({ message: "You must login first" });
-            }
-            findEmail.fcm_token = fcm_token;
-            findEmail.save();
-            const userWithoutPassword = {
-              ...findEmail._doc,
-              password: undefined,
-            };
-            res.status(200).json({
-              status: "success",
-              message: "Successfully, logged in",
-              token,
-              user: userWithoutPassword,
-            });
-          }
-        );
+
+        // Generate tokens
+        const accessToken = generateAccessToken(findEmail._id);
+        const refreshToken = generateRefreshToken(findEmail._id);
+
+        findEmail.save();
+        const userWithoutPassword = {
+          ...findEmail._doc,
+          password: undefined,
+        };
+
+        res.cookie("refreshToken", refreshToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "strict",
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+          path: "/",
+        });
+
+        res.status(200).json({
+          status: "success",
+          message: "Successfully, logged in",
+          accessToken,
+          refreshToken,
+          user: userWithoutPassword,
+        });
       } else {
         return res
           .status(422)
@@ -299,6 +304,10 @@ export const logoutUser = catchAsync(async (req, res) => {
     user.fcm_token = "";
     user.onlineStatus = false;
     await user.save();
+
+    // Clear refresh token cookie
+    res.clearCookie("refreshToken");
+
     res.status(200).json({ message: "Successfully, logged out" });
   } catch (err) {
     res.status(500).json({ message: "Failed to logout" });

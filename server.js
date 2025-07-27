@@ -74,15 +74,12 @@ const httpServer = createServer(app);
 // Socket.io configuration
 const io = new Server(httpServer, {
   cors: {
-    origin: [
-      "http://localhost:8081",
-      "http://10.0.2.2:8081",
-      "http://192.168.20.68:8081",
-      "https://nepalkammaserver.fly.dev"
-    ],
+    origin: "*", // Allow all origins for testing
     methods: ["GET", "POST"],
     credentials: true,
   },
+  allowEIO3: true, // Allow Engine.IO v3 clients
+  transports: ['websocket', 'polling']
 });
 
 // Configure socket.io
@@ -95,6 +92,6 @@ const PORT = process.env.PORT || 8000;
 const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
 
 // Start the server
-httpServer.listen(PORT, HOST , () => {
-  console.log(`Worker ${process.pid} started on port 8000`);
+httpServer.listen(PORT, HOST, () => {
+  console.log(`Server started on ${HOST}:${PORT}`);
 });
