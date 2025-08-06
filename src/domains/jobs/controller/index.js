@@ -45,15 +45,21 @@ export const createJob = catchAsync(async (req, res) => {
       experiesInHrs,
     } = req.body;
 
+    console.log(req.body, "req.body");
+
     let experiesIndate = new Date();
+    let priority = "Low";
 
     if (experiesInHrs === 6) {
       experiesIndate = new Date(new Date().getTime() + 6 * 60 * 60 * 1000);
+      priority = "Urgent";
       // experiesIndate = new Date(new Date().getTime() + 0.5 * 60 * 1000);
     } else if (experiesInHrs === 12) {
       experiesIndate = new Date(new Date().getTime() + 12 * 60 * 60 * 1000);
+      priority = "Medium";
     } else if (experiesInHrs === 24) {
       experiesIndate = new Date(new Date().getTime() + 24 * 60 * 60 * 1000);
+      priority = "Low";
     } else {
       return res.status(500).json({ message: "Invalid experiesInHrs" });
     }
@@ -72,6 +78,7 @@ export const createJob = catchAsync(async (req, res) => {
       category,
       postedBy: req.user._id,
       experiesIn: experiesIndate,
+      priority: priority,
     });
 
     await jobData.save();
@@ -98,7 +105,7 @@ export const createJob = catchAsync(async (req, res) => {
         };
       })
     );
-    await NotificationModel.insertMany(notifications);
+    await NotificationModel.insertMany(notifications);experiesIndate
     notifications.forEach((notification) => {
       if (notification.onlineStatus) {
         emitNotification(req.io, notification.recipientId.toString(), {
@@ -209,10 +216,10 @@ export const createJob = catchAsync(async (req, res) => {
     clearCache([
       "jobs_1_5", // First page of jobs
       `nearby_${latitude}_${longitude}`,
-      // Add any other cache keys that might be affected
+      `user_jobs${req.user._id}`
     ]);
 
-    res.status(201).json({ message: "Successfully! created" });
+    res.status(201).json({ message: "Successfully! created", job: jobData });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to create job" });
@@ -267,6 +274,33 @@ export const getJob = catchAsync(async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to get job" });
+  }
+});
+
+/**
+ * @function getSingleUserJobs
+ */
+export const getSingleUserJobs = catchAsync(async (req, res) => {
+  console.log("this route hitted getSingleUserJobs");
+  try {
+    const { id } = req.params;
+    const cacheKey = `user_jobs${id}`;
+
+    const result = await getOrSetCache(cacheKey, async () => {
+      const userJobs = await Job.find({ postedBy: id })
+        .sort({ createdAt: -1 })
+        .populate(
+          "postedBy",
+          "username email profilePic onlineStatus can_review skills address location"
+        )
+        .exec();
+      return { userJobs };
+    }, 600); // 10 minute TTL for user jobs
+
+    res.status(200).json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to get user jobs" });
   }
 });
 
@@ -562,20 +596,21 @@ export const deleteJobs = catchAsync(async (req, res, next) => {
   try {
     const { jobId } = req.params;
     const job = await Job.findById(jobId);
+    console.log(req.params.jobId, "job")
+    if (!job) {
+      return res.status(404).json({ message: "Job not found" });
+    }
 
     if (
-      job.status === "In_Progress" &&
-      job.status === "Completed" &&
-      job.status === "Cancelled"
+      job?.status === "In_Progress" &&
+      job?.status === "Completed" &&
+      job?.status === "Cancelled"
     ) {
       return res
         .status(400)
         .json({ message: "You can't delete this job, it is already assigned" });
     }
 
-    if (!job) {
-      return res.status(404).json({ message: "Job not found" });
-    }
     await Job.findByIdAndDelete(jobId);
 
     // Get coordinates from the job before deleting
@@ -585,7 +620,7 @@ export const deleteJobs = catchAsync(async (req, res, next) => {
     clearCache([
       "jobs_1_5", // First page of jobs
       `nearby_${coordinates[1]}_${coordinates[0]}`,
-      // Add any other cache keys that might be affected
+      `user_jobs${req.user._id}`
     ]);
     res.status(200).json({ message: "Job deleted" });
   } catch (err) {

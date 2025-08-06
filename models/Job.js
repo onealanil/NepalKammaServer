@@ -63,6 +63,11 @@ const JobInfoSchema = new mongoose.Schema(
       enum: ["Pending", "In_Progress", "Completed", "Cancelled", "Paid"],
       default: "Pending",
     },
+    priority:{
+      type: String,
+      enum: ["Low", "Medium", "Urgent"],
+      default: "Low",
+    },
     assignedTo: {
       type: Schema.Types.ObjectId,
       ref: "User",

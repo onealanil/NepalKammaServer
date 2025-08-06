@@ -6,6 +6,7 @@ import express from "express";
 import { protect, permission } from "../domains/auth/middlewares/auth.js";
 import {
   createGig,
+  deleteSingleGig,
   getGig,
   getSingleUserGigs,
   nearByGig,
@@ -76,5 +77,12 @@ router.route(`/searchgig`).get(protect, searchGig);
  * @param {string} id - The ID of the user whose gigs are to be retrieved.
  */
 router.route(`/getSingleUserGig/:id`).get(protect, getSingleUserGigs);
+
+/**
+ * @description This route is used to delete a sing users gigs
+ * @route DELETE /api/v1/gig/deleteUsergig/:id
+ * @access private
+ */
+router.route(`/deleteUsergig/:id`).delete(protect, deleteSingleGig);
 
 export default router;

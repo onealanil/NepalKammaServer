@@ -8,6 +8,7 @@ import {
   createJob,
   deleteJobs,
   getJob,
+  getSingleUserJobs,
   nearBy,
   recommendationJobs,
   searchJob,
@@ -41,6 +42,13 @@ router
  * @access Private
  */
 router.route(`/`).get(protect, getJob);
+
+/**
+ * @description This route is used to get a job by user.
+ * @route GET /api/v1/
+ * @access Private
+ */
+router.route(`/getSingleUserJob/:id`).get(protect, getSingleUserJobs);
 
 /**
  * @description This route is used to get the nearby jobs based on latitude and longitude.

@@ -48,9 +48,13 @@ export const createJobValidation = [
     .isString()
     .withMessage("Job description must be a string"),
   check("payment_method")
-    .isArray()
-    .withMessage("Payment method must be an array")
-    .custom(paymentRequiredValidator),
+    .trim()
+    .not()
+    .isEmpty()
+    .withMessage("Payment method is required"),
+    // .isArray()
+    // .withMessage("Payment method must be an array")
+    // .custom(paymentRequiredValidator),
   check("price").isNumeric().withMessage("Price must be a number"),
   check("category")
     .trim()

@@ -225,7 +225,7 @@ export const LoginUser = catchAsync(async (req, res) => {
 
         findEmail.save();
         const userInfo = {
-          id: findEmail._id,
+          _id: findEmail._id,
           role: findEmail.role,
           username: findEmail.username,
         };
@@ -406,6 +406,8 @@ export const updateProfilePicController = async (req, res) => {
 
     res.status(200).send({
       success: true,
+      public_id: cdb.public_id,
+      url: cdb.secure_url,
       message: "Profile picture updated",
     });
   } catch (error) {
@@ -432,6 +434,7 @@ export const updatePhoneNumber = async (req, res) => {
       phoneNumber: phone,
       _id: { $ne: req.user._id },
     });
+    
     if (existingUser) {
       return res.status(400).send({
         success: false,
@@ -440,14 +443,23 @@ export const updatePhoneNumber = async (req, res) => {
     }
 
     const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(400).send({
+        success: false,
+        message: "User not found, Login again!",
+      });
+    }
+
     user.phoneNumber = phone;
     await user.save();
-    res.status(200).send({
+    
+    return res.status(200).send({
       success: true,
       message: "Phone number updated",
     });
+    
   } catch (error) {
-    res.status(500).send({
+    return res.status(500).send({
       success: false,
       message: "Error In update phone number API",
       error,

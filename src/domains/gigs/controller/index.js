@@ -68,7 +68,7 @@ export const createGig = catchAsync(async (req, res) => {
     if (!gig) {
       return res.status(404).json({ message: "Gig not found" });
     }
-    
+
     const { title, gig_description, price, category } = req.body;
     const gigData = await Gig.findByIdAndUpdate(
       gig_id,
@@ -86,10 +86,9 @@ export const createGig = catchAsync(async (req, res) => {
     clearCache([
       'gigs_all_1_10', // First page of all gigs
       `user_gigs_${req.user._id}`, // User's gigs
-      // Add other cache keys that might be affected
     ]);
 
-    res.status(201).json({ message: "Successfully! created", gigData });
+    res.status(201).json({ status: "success", message: "Successfully! created", gigData });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to create gig" });
@@ -122,9 +121,9 @@ export const getGig = catchAsync(async (req, res) => {
         .skip((page - 1) * limit)
         .limit(limit)
         .exec();
-      
+
       const totalGigs = await Gig.countDocuments();
-      
+
       return {
         gig: gigs,
         totalGigs,
@@ -216,9 +215,8 @@ export const searchGig = catchAsync(async (req, res, next) => {
     } = req.query;
 
     // Create a unique cache key based on all search parameters
-    const cacheKey = `gigs_search_${text}_${category}_${lng}_${lat}_${distance}_${
-      sortByRating
-    }_${sortByPriceHighToLow}_${sortByPriceLowToHigh}_${page}_${limit}`;
+    const cacheKey = `gigs_search_${text}_${category}_${lng}_${lat}_${distance}_${sortByRating
+      }_${sortByPriceHighToLow}_${sortByPriceLowToHigh}_${page}_${limit}`;
 
     const result = await getOrSetCache(cacheKey, async () => {
       let query = {};
@@ -310,3 +308,47 @@ export const getSingleUserGigs = catchAsync(async (req, res) => {
     res.status(500).json({ message: "Failed to get user gigs" });
   }
 });
+
+/**
+ * @function deleteSingleGig
+ * @description Delete a single gig by its ID.
+ * @param {Object} req - The request object containing the gig ID in params.
+ * @param {Object} res - The response object to send the response.
+ * @returns - A JSON response with a success message if the gig is deleted.
+ * @throws - If an error occurs during the deletion process, a JSON response with an error message is sent.
+ * @async
+ */
+export const deleteSingleGig = catchAsync(async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const gig = await Gig.findById(id);
+
+    if (!gig) {
+      return res.status(404).json({ message: "Gig not found" });
+    }
+
+    if (req.user && gig.postedBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Unauthorized to delete this gig" });
+    }
+    if (gig.images && gig.images.length > 0) {
+      for (const image of gig.images) {
+        await cloudinary.v2.uploader.destroy(image.public_id);
+      }
+    }
+
+    await gig.deleteOne();
+
+    // Clear related caches
+    clearCache([
+      'gigs_all_1_10',
+      `user_gigs_${gig.postedBy}`,
+    ]);
+
+    res.status(200).json({ message: "Gig deleted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to delete gig" });
+  }
+});
+

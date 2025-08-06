@@ -83,8 +83,8 @@ router.route("/forgetPassword").put(forgetPassword);
 router.route("/logout").get(logoutUser);
 
 /**
- * @description Resend OTP route
- * @route POST /api/v1/user/resend-otp
+ * @description Editing the details of the user
+ * @route POST /api/v1/user/edit-profile/:id
  * @access Private
  * @param {id} id - User ID
  *

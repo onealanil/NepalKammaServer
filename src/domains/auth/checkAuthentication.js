@@ -6,6 +6,7 @@
 import User from "../../../models/User.js";
 import catchAsync from "../../utils/catchAsync.js";
 import createError from "../../utils/createError.js";
+import jwt from "jsonwebtoken";
 
 /**
  * @function checkAuthentication
