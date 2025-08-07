@@ -35,7 +35,14 @@ export const signUpValidation = [
     .isIn(["job_provider", "job_seeker", "admin"])
     .withMessage("Role must be either user or admin"),
   check("fcm_token").trim(),
-  check("security_answer").trim().not().isEmpty().withMessage("Security answer is required")
+  check("security_answer").trim().not().isEmpty().withMessage("Security answer is required"),
+  check("location")
+    .trim()
+    .not()
+    .isEmpty()
+    .withMessage("Location is required")
+    .isString()
+    .withMessage("Location must be a string"),
 ];
 
 export const loginValidation = [

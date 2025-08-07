@@ -8,6 +8,7 @@ import {
   createJob,
   deleteJobs,
   getJob,
+  getSingleJob,
   getSingleUserJobs,
   nearBy,
   recommendationJobs,
@@ -103,5 +104,13 @@ router
 router
   .route(`/deleteJob/:jobId`)
   .delete(protect, permission(["job_provider"]), deleteJobs);
+
+/**
+ * @function this route is used to fetch a single job
+ * @route GET /api/v1/job/:jobId
+ * @access Private
+ * @permission job_seeker
+ */
+router.route(`/:jobId`).get(protect, permission(["job_seeker"]), getSingleJob)
 
 export default router;

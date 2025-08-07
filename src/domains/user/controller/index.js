@@ -40,6 +40,7 @@ import { generateAccessToken, generateRefreshToken } from "../../../utils/jwt.js
  */
 export const createUser = catchAsync(async (req, res) => {
   try {
+    console.log(req.body)
     const {
       username,
       email,
@@ -48,6 +49,9 @@ export const createUser = catchAsync(async (req, res) => {
       gender,
       fcm_token,
       security_answer,
+      location,
+      latitude,
+      longitude
     } = req.body;
     const findEmail = await User.findOne({ email });
     const findUsername = await User.findOne({ username });
@@ -74,6 +78,10 @@ export const createUser = catchAsync(async (req, res) => {
       isVerified: false,
       fcm_token,
       security_answer: hashedSecurityAnswer,
+      location,
+      address: {
+        coordinates: [longitude, latitude],
+      },
     });
 
     await signupUser
@@ -228,6 +236,8 @@ export const LoginUser = catchAsync(async (req, res) => {
           _id: findEmail._id,
           role: findEmail.role,
           username: findEmail.username,
+          location: findEmail.location,
+          address: findEmail.address
         };
 
         res.cookie("refreshToken", refreshToken, {
@@ -434,7 +444,7 @@ export const updatePhoneNumber = async (req, res) => {
       phoneNumber: phone,
       _id: { $ne: req.user._id },
     });
-    
+
     if (existingUser) {
       return res.status(400).send({
         success: false,
@@ -452,12 +462,12 @@ export const updatePhoneNumber = async (req, res) => {
 
     user.phoneNumber = phone;
     await user.save();
-    
+
     return res.status(200).send({
       success: true,
       message: "Phone number updated",
     });
-    
+
   } catch (error) {
     return res.status(500).send({
       success: false,
@@ -686,7 +696,7 @@ export const searchUser = catchAsync(async (req, res) => {
     const user = await User.find({
       username: { $regex: new RegExp(`^${username}$`, "i") },
       role: "job_seeker",
-    }).select("-password -documents");
+    }).select("-password -documents -security_answer");
 
     res.status(200).json({ user });
   } catch (err) {

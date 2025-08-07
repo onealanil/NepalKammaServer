@@ -50,14 +50,18 @@ export const createJob = catchAsync(async (req, res) => {
     let experiesIndate = new Date();
     let priority = "Low";
 
-    if (experiesInHrs === 6) {
+    if (typeof experiesInHrs === "number") {
+      experiesInHrs.toString();
+    }
+
+    if (experiesInHrs === "6") {
       experiesIndate = new Date(new Date().getTime() + 6 * 60 * 60 * 1000);
       priority = "Urgent";
       // experiesIndate = new Date(new Date().getTime() + 0.5 * 60 * 1000);
-    } else if (experiesInHrs === 12) {
+    } else if (experiesInHrs === "12") {
       experiesIndate = new Date(new Date().getTime() + 12 * 60 * 60 * 1000);
       priority = "Medium";
-    } else if (experiesInHrs === 24) {
+    } else if (experiesInHrs === "24") {
       experiesIndate = new Date(new Date().getTime() + 24 * 60 * 60 * 1000);
       priority = "Low";
     } else {
@@ -105,7 +109,7 @@ export const createJob = catchAsync(async (req, res) => {
         };
       })
     );
-    await NotificationModel.insertMany(notifications);experiesIndate
+    await NotificationModel.insertMany(notifications); experiesIndate
     notifications.forEach((notification) => {
       if (notification.onlineStatus) {
         emitNotification(req.io, notification.recipientId.toString(), {
@@ -281,7 +285,6 @@ export const getJob = catchAsync(async (req, res) => {
  * @function getSingleUserJobs
  */
 export const getSingleUserJobs = catchAsync(async (req, res) => {
-  console.log("this route hitted getSingleUserJobs");
   try {
     const { id } = req.params;
     const cacheKey = `user_jobs${id}`;
@@ -293,6 +296,10 @@ export const getSingleUserJobs = catchAsync(async (req, res) => {
           "postedBy",
           "username email profilePic onlineStatus can_review skills address location"
         )
+        .populate(
+          "assignedTo",
+          "username email profilePic onlineStatus skills address location"
+        )
         .exec();
       return { userJobs };
     }, 600); // 10 minute TTL for user jobs
@@ -303,6 +310,7 @@ export const getSingleUserJobs = catchAsync(async (req, res) => {
     res.status(500).json({ message: "Failed to get user jobs" });
   }
 });
+
 
 /**
  * @function nearBy
@@ -357,45 +365,61 @@ export const nearBy = catchAsync(async (req, res) => {
   }
 });
 
-/**
- * @function recommendationJobs
- * @description Retrieves job recommendations for a specific user.
- * @param {Object} req - The request object containing user ID.
- * @param {Object} res - The response object to send the response.
- * @returns - A JSON response containing recommended jobs.
- * @throws - If an error occurs during the process, a JSON response with an error message is sent.
- * @async
- */
+
 export const recommendationJobs = async (req, res) => {
   try {
     const id = req.user._id;
-    if (!id) return res.status(400).json({ message: "id is required" });
+    if (!id) return res.status(400).json({ message: "User ID is required" });
 
     const cacheKey = `recommendations_${id}`;
 
     const result = await getOrSetCache(cacheKey, async () => {
+      // Get recommendations with metadata from your enhanced algorithm
       const recommendJobsList = await recommendJobs(id);
+
+      if (recommendJobsList.length === 0) {
+        return {
+          recommendedJobs: [],
+          totalCount: 0,
+          message: "No recommendations found. Complete your profile for better matches."
+        };
+      }
+
       const jobIds = recommendJobsList.map((job) => job._id);
 
-      const populatedJobs = await Job.find({
-        _id: { $in: jobIds },
-        visibility: "public",
-        job_status: "Pending",
+      const populatedUsers = await User.find({
+        _id: { $in: recommendJobsList.map(job => job.postedBy) }
       })
-        .sort({ createdAt: -1 })
-        .populate(
-          "postedBy",
-          "username email profilePic onlineStatus can_review"
-        )
-        .exec();
+        .select("username email profilePic onlineStatus can_review")
+        .lean();
 
-      return { recommendJobsList: populatedJobs };
-    });
+      // Add populated user data to recommendation results
+      const enhancedJobs = recommendJobsList.map(job => {
+        const populatedUser = populatedUsers.find(
+          user => user._id.toString() === job.postedBy.toString()
+        );
+
+        return {
+          ...job,
+          postedBy: populatedUser || job.postedBy
+        };
+      });
+
+      return {
+        recommendedJobs: enhancedJobs,
+        totalCount: enhancedJobs.length,
+        algorithm: "Enhanced TF-IDF with skill matching",
+        generatedAt: new Date().toISOString()
+      };
+    }, 300);
 
     res.status(200).json(result);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get job" });
+    console.error("Recommendation API Error:", err);
+    res.status(500).json({
+      message: "Failed to get job recommendations",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 };
 
@@ -535,7 +559,8 @@ export const updateJobStatus = catchAsync(async (req, res, next) => {
     clearCache([
       "jobs_1_5", // First page of jobs
       `nearby_${job.address.coordinates[1]}_${job.address.coordinates[0]}`,
-      // Add any other cache keys that might be affected
+      `user_jobs${req.user._id}`
+
     ]);
 
     res.status(200).json({ message: "Job status updated", userJobs });
@@ -596,15 +621,14 @@ export const deleteJobs = catchAsync(async (req, res, next) => {
   try {
     const { jobId } = req.params;
     const job = await Job.findById(jobId);
-    console.log(req.params.jobId, "job")
     if (!job) {
       return res.status(404).json({ message: "Job not found" });
     }
 
     if (
-      job?.status === "In_Progress" &&
-      job?.status === "Completed" &&
-      job?.status === "Cancelled"
+      job?.job_status === "In_Progress" &&
+      job?.job_status === "Completed" &&
+      job?.job_status === "Cancelled"
     ) {
       return res
         .status(400)
@@ -628,3 +652,56 @@ export const deleteJobs = catchAsync(async (req, res, next) => {
     res.status(500).json({ message: "Failed to delete job" });
   }
 });
+
+/**
+ * @function getSingleJob
+ * @description Retrieves a single job by its ID.
+ * @param {Object} req - The request object containing the job ID.
+ * @param {Object} res - The response object to send the response.
+ * @returns - A JSON response with job details or an error message.
+ * @throws - If the job is not found or an internal error occurs.
+ * @async
+ */
+export const getSingleJob = catchAsync(async (req, res) => {
+  try {
+    const { jobId } = req.params;
+
+    if (!jobId) {
+      return res.status(400).json({ message: "Job ID is required" });
+    }
+
+    const cacheKey = `single_job_${jobId}`;
+
+    const result = await getOrSetCache(cacheKey, async () => {
+      const job = await Job.findById(jobId)
+        .populate(
+          "postedBy",
+          "username email profilePic onlineStatus can_review skills address location"
+        )
+        .populate(
+          "assignedTo",
+          "username email profilePic onlineStatus skills address location"
+        )
+        .exec();
+
+      if (!job) {
+        return null;
+      }
+
+      return job;
+    });
+
+    if (!result) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      job: result,
+    });
+  } catch (err) {
+    console.error("Error fetching single job:", err);
+    res.status(500).json({ message: "Failed to get the job" });
+  }
+});
+
