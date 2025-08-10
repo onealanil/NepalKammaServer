@@ -705,3 +705,48 @@ export const getSingleJob = catchAsync(async (req, res) => {
   }
 });
 
+/**
+ * @function getRecentPublicJobs
+ * @description Retrieves the 5 most recent public jobs.
+ * @param {Object} req - The request object.
+ * @param {Object} res - The response object to send the response.
+ * @returns {Object} - JSON response containing the recent jobs or an error message.
+ * @throws - Returns 404 if no jobs found, 500 for server errors.
+ * @async
+ */
+export const getRecentPublicJobs = catchAsync(async (req, res) => {
+  try {
+    const cacheKey = `recent_public_jobs`;
+
+    const result = await getOrSetCache(cacheKey, async () => {
+      const jobs = await Job.find({
+        visibility: "public"
+      })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .populate(
+          "postedBy",
+          "username email profilePic onlineStatus can_review skills address location"
+        )
+        .populate(
+          "assignedTo",
+          "username email profilePic onlineStatus skills address location"
+        )
+        .exec();
+
+      return jobs.length > 0 ? jobs : null;
+    });
+
+    if (!result) {
+      return res.status(404).json({ message: "No recent public jobs found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      jobs: result,
+    });
+  } catch (err) {
+    console.error("Error fetching recent public jobs:", err);
+    res.status(500).json({ message: "Failed to fetch recent public jobs" });
+  }
+});

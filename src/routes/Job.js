@@ -8,6 +8,7 @@ import {
   createJob,
   deleteJobs,
   getJob,
+  getRecentPublicJobs,
   getSingleJob,
   getSingleUserJobs,
   nearBy,
@@ -65,6 +66,12 @@ router.route(`/getNearbyJob/:latitude/:longitude`).get(protect, nearBy);
  * @access Private
  */
 router.route(`/getRecommendedJob`).get(protect, recommendationJobs);
+
+/**
+ * @description This route is used to get the 5 recent jobs
+ * @route GET /api/v1/job/getRecentJob
+ */
+router.route(`/getRecentJob`).get(protect, getRecentPublicJobs)
 
 /**
  * @description This route is used to search for jobs.
