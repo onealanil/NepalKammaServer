@@ -287,7 +287,7 @@ export const getJob = catchAsync(async (req, res) => {
 export const getSingleUserJobs = catchAsync(async (req, res) => {
   try {
     const { id } = req.params;
-    const cacheKey = `user_jobs${id}`;
+    const cacheKey = `user_jobs${req.user._id}`;
 
     const result = await getOrSetCache(cacheKey, async () => {
       const userJobs = await Job.find({ postedBy: id })
@@ -302,7 +302,7 @@ export const getSingleUserJobs = catchAsync(async (req, res) => {
         )
         .exec();
       return { userJobs };
-    }, 600); // 10 minute TTL for user jobs
+    }, 600);
 
     res.status(200).json(result);
   } catch (err) {
@@ -546,28 +546,50 @@ export const updateJobStatus = catchAsync(async (req, res, next) => {
   try {
     const { jobId } = req.params;
     const { job_status, assignedTo } = req.body;
+    console.log(jobId, job_status, assignedTo);
 
     const job = await Job.findById(jobId);
     if (!job) {
       return res.status(404).json({ message: "Job not found" });
     }
 
+    if (job_status === "Cancelled") {
+      if (!job.assignedTo) {
+        return res.status(400).json({ message: "Job is already unassigned" });
+      }
+
+      job.job_status = "Pending";
+      job.assignedTo = null;
+      const updatedJob = await job.save();
+
+      clearCache([
+        "jobs_1_5", 
+        `nearby_${job.address.coordinates[1]}_${job.address.coordinates[0]}`,
+        `user_jobs${req.user._id}`
+      ]);
+
+      return res.status(200).json({ message: "Job reset to Pending", job: updatedJob });
+    }
+
     job.job_status = job_status;
-    job.assignedTo = assignedTo;
-    const userJobs = await job.save();
+    if (assignedTo) {
+      job.assignedTo = assignedTo;
+    }
+
+    const updatedJob = await job.save();
 
     clearCache([
-      "jobs_1_5", // First page of jobs
+      "jobs_1_5", 
       `nearby_${job.address.coordinates[1]}_${job.address.coordinates[0]}`,
       `user_jobs${req.user._id}`
-
     ]);
 
-    res.status(200).json({ message: "Job status updated", userJobs });
+    res.status(200).json({ message: "Job status updated", job: updatedJob });
   } catch (error) {
     next(error);
   }
 });
+
 
 /**
  * @function completedJobs
@@ -720,7 +742,8 @@ export const getRecentPublicJobs = catchAsync(async (req, res) => {
 
     const result = await getOrSetCache(cacheKey, async () => {
       const jobs = await Job.find({
-        visibility: "public"
+        visibility: "public",
+        job_status: "Pending"
       })
         .sort({ createdAt: -1 })
         .limit(5)
@@ -737,13 +760,9 @@ export const getRecentPublicJobs = catchAsync(async (req, res) => {
       return jobs.length > 0 ? jobs : null;
     });
 
-    if (!result) {
-      return res.status(404).json({ message: "No recent public jobs found" });
-    }
-
     res.status(200).json({
       success: true,
-      jobs: result,
+      jobs: result || [],
     });
   } catch (err) {
     console.error("Error fetching recent public jobs:", err);

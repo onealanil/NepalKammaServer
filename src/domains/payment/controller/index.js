@@ -7,8 +7,10 @@
  * @requires cloudinary
  * @requirres multer
  */
+import Job from "../../../../models/Job.js";
 import Payment from "../../../../models/Payment.js";
 import { getDataUris } from "../../../utils/Features.js";
+import { clearCache } from "../../../utils/cacheService.js";
 import catchAsync from "../../../utils/catchAsync.js";
 import cloudinary from "cloudinary";
 
@@ -23,20 +25,44 @@ import cloudinary from "cloudinary";
  */
 export const createPayment = catchAsync(async (req, res) => {
   try {
-    const { PaymentBy, PaymentTo, job, amount, payment_type } = req.body;
+    const { PaymentBy, PaymentTo, job, amount, payment_type, recieverNumber } = req.body;
+
+    // Store payment record internally
     const payment = await Payment.create({
       PaymentBy,
       PaymentTo,
       paymentType: payment_type,
       job,
       amount,
+      recieverNumber
     });
-    res.status(200).json(payment);
+
+    const updatedJob = await Job.findByIdAndUpdate(
+      job,
+      { job_status: "Paid" },
+      { new: true }
+    );
+
+    if (!updatedJob) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    clearCache([
+      `user_jobs${req.user._id}`
+    ])
+
+    res.status(200).json({
+      success: true,
+      message: "Payment recorded and job marked as Paid",
+      payment,
+      job: updatedJob
+    });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Failed to create payment" });
+    res.status(500).json({ message: "Failed to record payment" });
   }
 });
+
 
 /**
  * @function getPaymentByProvider
