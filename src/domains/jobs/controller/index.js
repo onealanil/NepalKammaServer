@@ -445,6 +445,8 @@ export const searchJob = catchAsync(async (req, res, next) => {
       sortByPriceLowToHigh,
     } = req.query;
 
+    console.log(req.query,"this is query")
+
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 5;
 

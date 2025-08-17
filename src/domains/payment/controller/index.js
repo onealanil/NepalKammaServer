@@ -25,13 +25,13 @@ import cloudinary from "cloudinary";
  */
 export const createPayment = catchAsync(async (req, res) => {
   try {
-    const { PaymentBy, PaymentTo, job, amount, payment_type, recieverNumber } = req.body;
+    const {job, amount, recieverNumber } = req.body;
 
     // Store payment record internally
     const payment = await Payment.create({
-      PaymentBy,
-      PaymentTo,
-      paymentType: payment_type,
+      PaymentBy: req.body.paymentBy,
+      PaymentTo: req.body.paymentTo,
+      paymentType: req.body.paymentMethod,
       job,
       amount,
       recieverNumber

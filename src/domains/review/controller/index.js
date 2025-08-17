@@ -84,21 +84,47 @@ export const createReview = catchAsync(async (req, res) => {
 
 /**
  * @function getReviewByProvider
- * @description Retrieves all reviews for a specific provider.
- * @param req - The request object containing the provider ID.
+ * @description Retrieves reviews for a specific provider with pagination (5 reviews per page).
+ * @param req - The request object containing the provider ID and optional page query parameter.
  * @param res - The response object to send the result.
- * @returns - A JSON response with the list of reviews or an error message.
+ * @returns - A JSON response with the list of reviews, pagination info, or an error message.
  * @throws - Throws an error if the retrieval fails.
  */
 export const getReviewByProvider = catchAsync(async (req, res, next) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = 5;
+    const skip = (page - 1) * limit;
+
+    // Get total count for pagination info
+    const totalReviews = await Review.countDocuments({
+      reviewedTo: req.params.id,
+    });
+
     const reviews = await Review.find({
       reviewedTo: req.params.id,
     })
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .populate("reviewedBy", "-password")
       .populate("reviewedTo", "-password");
-    res.status(200).json(reviews);
+
+    const totalPages = Math.ceil(totalReviews / limit);
+    const hasNextPage = page < totalPages;
+    const hasPrevPage = page > 1;
+
+    res.status(200).json({
+      reviews,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalReviews,
+        hasNextPage,
+        hasPrevPage,
+        limit
+      }
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to get reviews" });

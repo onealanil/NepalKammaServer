@@ -200,6 +200,7 @@ export const nearByGig = catchAsync(async (req, res) => {
  * @async
  */
 export const searchGig = catchAsync(async (req, res, next) => {
+  console.log("this is req.query", req.query);
   try {
     const {
       text,
@@ -214,10 +215,19 @@ export const searchGig = catchAsync(async (req, res, next) => {
       limit = 5
     } = req.query;
 
-    // Create a unique cache key based on all search parameters
-    const cacheKey = `gigs_search_${text}_${category}_${lng}_${lat}_${distance}_${sortByRating
-      }_${sortByPriceHighToLow}_${sortByPriceLowToHigh}_${page}_${limit}`;
+    let cacheKeyParts = [`search`];
 
+    if (text) cacheKeyParts.push(`text_${text}`);
+    if (category) cacheKeyParts.push(`cat_${category}`);
+    if (lng && lat) cacheKeyParts.push(`loc_${lng}_${lat}`);
+    if (distance) cacheKeyParts.push(`dist_${distance}`);
+    if (sortByRating === "true") cacheKeyParts.push(`sort_rating`);
+    if (sortByPriceHighToLow === "true") cacheKeyParts.push(`sort_price_desc`);
+    if (sortByPriceLowToHigh === "true") cacheKeyParts.push(`sort_price_asc`);
+
+    cacheKeyParts.push(`page_${page}_limit_${limit}`);
+
+    const cacheKey = cacheKeyParts.join('_');
     const result = await getOrSetCache(cacheKey, async () => {
       let query = {};
 
@@ -351,4 +361,48 @@ export const deleteSingleGig = catchAsync(async (req, res) => {
     res.status(500).json({ message: "Failed to delete gig" });
   }
 });
+
+// /**
+//  * @function getSingleGig
+//  * @description Get a single gig by its ID.
+//  * @param {Object} req - The request object containing the gig ID in params.
+//  */
+
+export const getSingleGig = catchAsync(async (req, res) => {
+  try {
+    const { gigId } = req.params;
+    const cacheKey = `single_gig_${gigId}`;
+
+    const result = await getOrSetCache(cacheKey, async () => {
+      const gig = await Gig.findById(gigId)
+        .populate(
+          "postedBy",
+          "username email profilePic onlineStatus can_review skills address location"
+        )
+        .exec();
+
+      if (!gig) {
+        return null;
+      }
+
+      return gig;
+    });
+
+    if (!result) {
+      return res.status(404).json({ message: "Gig not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      gig: result,
+    });
+  } catch (err) {
+    console.error("Error fetching single gig:", err);
+    res.status(500).json({ message: "Failed to get the gig" });
+  }
+});
+
+
+
+
 

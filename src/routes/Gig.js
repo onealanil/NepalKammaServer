@@ -8,6 +8,7 @@ import {
   createGig,
   deleteSingleGig,
   getGig,
+  getSingleGig,
   getSingleUserGigs,
   nearByGig,
   searchGig,
@@ -56,6 +57,7 @@ router
  */
 router.route(`/getNearbyGig/:latitude/:longitude`).get(protect, nearByGig);
 
+
 /**
  * @description This route is used to get gigs based on search criteria.
  * @route GET /api/v1/gig/searchgig
@@ -84,5 +86,8 @@ router.route(`/getSingleUserGig/:id`).get(protect, getSingleUserGigs);
  * @access private
  */
 router.route(`/deleteUsergig/:id`).delete(protect, deleteSingleGig);
+
+router.route("/:gigId").get(protect, getSingleGig);
+
 
 export default router;

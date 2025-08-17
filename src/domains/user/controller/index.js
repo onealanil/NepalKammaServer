@@ -211,6 +211,7 @@ export const resendOTP = catchAsync(async (req, res) => {
  */
 export const LoginUser = catchAsync(async (req, res) => {
   const { email, password } = req.body;
+  console.log(email, password)
   if (!email || !password) {
     return res.status(422).json({ message: "Something went wrong" });
   }
@@ -553,12 +554,13 @@ export const getSingleUserProvider = catchAsync(async (req, res) => {
     const userId = req.params.id;
 
     // Get user details excluding password
-    const user = await User.findById(userId).select("-password");
+    const user = await User.findById(userId).select("-password -security_answer -documents");
 
-    // Get all jobs posted by the user
-    const userJobs = await Job.find({ postedBy: userId })
-      .populate("postedBy", "-password -documents -isVerified")
-      .populate("assignedTo", "-password -documents -isVerified ");
+    // Get only public jobs posted by the user
+    const userJobs = await Job.find({
+      postedBy: userId,
+      visibility: "public"
+    })
 
     res.status(200).json({ user, userJobs });
   } catch (err) {
@@ -879,6 +881,7 @@ export const getTopRatedJobProviders = catchAsync(async (req, res) => {
         $project: {
           password: 0,
           fcm_token: 0,
+          security_answer: 0,
         },
       },
     ]);
