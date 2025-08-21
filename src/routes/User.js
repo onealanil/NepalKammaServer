@@ -25,6 +25,8 @@ import {
   getSingleUserProvider,
   forgetPassword,
   logoutUser,
+  getTopRatedJobSeeker,
+  getSingleUserSeeker,
 } from "../domains/user/controller/index.js";
 import {
   loginValidation,
@@ -131,6 +133,14 @@ router.route("/user/:id").get(protect, getSingleUser);
 router.route("/user/provider/:id").get(protect, getSingleUserProvider);
 
 /**
+ * * @description Get single user seeker route
+ * * @route GET /api/v1/user/seeker/:id
+ * * @access Private
+ * @param {id} id - User ID
+ */
+router.route("/user/seeker/:id").get(protect, getSingleUserSeeker);
+
+/**
  * * @description Get all job seekers route
  * * @route GET /api/v1/user/job-seeker
  * * @access Private
@@ -193,5 +203,12 @@ router.route(`/saved-jobs`).get(protect, getSavedJobs);
  * * @access Private
  */
 router.route(`/top-rated-job-provider`).get(protect, getTopRatedJobProviders);
+
+/**
+ * * @description Get top rated job seekers route
+ * * @route GET /api/v1/user/top-rated-job-seeker
+ * * @access Private
+ */
+router.route(`/top-rated-job-seeker`).get(protect, getTopRatedJobSeeker);
 
 export default router;

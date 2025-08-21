@@ -67,6 +67,7 @@ const corsOptions = {
     "http://127.0.0.1:5500", 
     "http://127.0.0.1:5501",  
     "http://192.168.1.58:3000",
+    "http://192.168.1.57:3000",
     "https://nepalkammaserver.fly.dev"
   ],
   credentials: true,

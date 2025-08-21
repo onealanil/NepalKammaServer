@@ -27,6 +27,7 @@ import jwt from "jsonwebtoken";
 import cloudinary from "cloudinary";
 import { getDataUri, getDataUris } from "../../../utils/Features.js";
 import Job from "../../../../models/Job.js";
+import Gig from "../../../../models/Gig.js";
 import Review from "../../../../models/Review.js";
 import { generateAccessToken, generateRefreshToken } from "../../../utils/jwt.js";
 
@@ -569,6 +570,33 @@ export const getSingleUserProvider = catchAsync(async (req, res) => {
   }
 });
 
+/**
+ * @function getSingleUserSeeker
+ * @param req - The request object containing user data for getting a single job seeker.
+ * * @param res - The response object to send the response back to the client.
+ * * @description - This function handles getting a single job seeker by their ID and fetching all jobs posted by that user.
+ * * @returns - A JSON response containing the user data and their jobs.
+ * * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
+ */
+export const getSingleUserSeeker = catchAsync(async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    // Get user details excluding password
+    const user = await User.findById(userId).select("-password -security_answer -documents");
+
+    // Get only public gigs posted by the user
+    const userGigs = await Gig.find({
+      postedBy: userId,
+    })
+
+    res.status(200).json({ user, userGigs });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to get user and their gigs" });
+  }
+});
+
 // get all users who are job seekers
 // export const getAllJobSeekers = catchAsync(async (req, res, next) => {
 //   try {
@@ -887,6 +915,59 @@ export const getTopRatedJobProviders = catchAsync(async (req, res) => {
     ]);
 
     res.status(200).json(topRatedJobProviders);
+  } catch (err) {
+    res.status(422).json({ message: err.message });
+  }
+});
+
+
+/**
+ * @function getTopRatedJobSeeker
+ * @param req - The request object containing user data for getting top-rated job seekers.
+ * @param res - The response object to send the response back to the client.
+ * @description - This function handles getting top-rated job seekers by validating the input data, checking for existing users, and returning the top-rated job seekers.
+ * @returns - A JSON response containing the top-rated job providers.
+ * @throws - If an error occurs during the process, it sends a 422 status code with an error message.
+ */
+export const getTopRatedJobSeeker = catchAsync(async (req, res) => {
+  try {
+    const topRatedJobSeekers = await User.aggregate([
+      {
+        $match: {
+          role: "job_seeker",
+          isDocumentVerified: "verified",
+        },
+      },
+      {
+        $lookup: {
+          from: "reviews",
+          localField: "_id",
+          foreignField: "reviewedTo",
+          as: "reviews",
+        },
+      },
+      {
+        $addFields: {
+          averageRating: {
+            $avg: "$reviews.rating",
+          },
+        },
+      },
+      {
+        $sort: {
+          averageRating: -1,
+        },
+      },
+      {
+        $project: {
+          password: 0,
+          fcm_token: 0,
+          security_answer: 0,
+        },
+      },
+    ]);
+
+    res.status(200).json(topRatedJobSeekers);
   } catch (err) {
     res.status(422).json({ message: err.message });
   }
