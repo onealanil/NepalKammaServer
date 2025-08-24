@@ -16,6 +16,8 @@ import { getDataUris } from "../../../utils/Features.js";
 import catchAsync from "../../../utils/catchAsync.js";
 import cloudinary from "cloudinary";
 import { getOrSetCache, clearCache } from "../../../utils/cacheService.js";
+import { StatusCodes } from "http-status-codes";
+import logger from "../../../utils/logger.js";
 /**
  * @function uploadImages
  * @description Upload images to Cloudinary and save the image data to the database.
@@ -26,30 +28,38 @@ import { getOrSetCache, clearCache } from "../../../utils/cacheService.js";
  * @async
  */
 export const uploadImages = catchAsync(async (req, res) => {
-  try {
-    const files = getDataUris(req.files);
+  const files = getDataUris(req.files);
 
-    const images = [];
-    for (let i = 0; i < files.length; i++) {
-      const fileData = files[i];
-      const cdb = await cloudinary.v2.uploader.upload(fileData, {});
-      images.push({
-        public_id: cdb.public_id,
-        url: cdb.secure_url,
-      });
-    }
+  logger.info('Gig image upload started', {
+    fileCount: files.length,
+    userId: req.user._id,
+    requestId: req.requestId
+  });
 
-    const imagesData = new Gig({
-      images: images,
+  const images = [];
+  for (let i = 0; i < files.length; i++) {
+    const fileData = files[i];
+    const cdb = await cloudinary.v2.uploader.upload(fileData, {});
+    images.push({
+      public_id: cdb.public_id,
+      url: cdb.secure_url,
     });
-
-    await imagesData.save();
-
-    res.status(201).json({ message: "Successfully! uploaded", imagesData });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to upload images" });
   }
+
+  const imagesData = new Gig({
+    images: images,
+  });
+
+  await imagesData.save();
+
+  logger.info('Gig images uploaded successfully', {
+    gigId: imagesData._id,
+    imageCount: images.length,
+    userId: req.user._id,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.CREATED).json({ message: "Successfully! uploaded", imagesData });
 });
 
 /**
@@ -62,37 +72,48 @@ export const uploadImages = catchAsync(async (req, res) => {
  * @async
  */
 export const createGig = catchAsync(async (req, res) => {
-  try {
-    const gig_id = req.params.id;
-    const gig = await Gig.findById(gig_id);
-    if (!gig) {
-      return res.status(404).json({ message: "Gig not found" });
-    }
+  const gig_id = req.params.id;
+  const gig = await Gig.findById(gig_id);
 
-    const { title, gig_description, price, category } = req.body;
-    const gigData = await Gig.findByIdAndUpdate(
-      gig_id,
-      {
-        title,
-        gig_description,
-        price,
-        category,
-        postedBy: req.user._id,
-      },
-      { new: true }
-    );
-
-    // Clear relevant caches after creating/updating a gig
-    clearCache([
-      'gigs_all_1_10', // First page of all gigs
-      `user_gigs_${req.user._id}`, // User's gigs
-    ]);
-
-    res.status(201).json({ status: "success", message: "Successfully! created", gigData });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to create gig" });
+  if (!gig) {
+    return res.status(StatusCodes.NOT_FOUND).json({ message: "Gig not found" });
   }
+
+  const { title, gig_description, price, category } = req.body;
+
+  logger.info('Gig update started', {
+    gigId: gig_id,
+    title,
+    category,
+    userId: req.user._id,
+    requestId: req.requestId
+  });
+
+  const gigData = await Gig.findByIdAndUpdate(
+    gig_id,
+    {
+      title,
+      gig_description,
+      price,
+      category,
+      postedBy: req.user._id,
+    },
+    { new: true }
+  );
+
+  // Clear relevant caches after creating/updating a gig
+  clearCache([
+    'gigs_all_1_10', // First page of all gigs
+    `user_gigs_${req.user._id}`, // User's gigs
+  ]);
+
+  logger.info('Gig updated successfully', {
+    gigId: gigData._id,
+    userId: req.user._id,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.CREATED).json({ status: "success", message: "Successfully! created", gigData });
 });
 
 
@@ -106,37 +127,39 @@ export const createGig = catchAsync(async (req, res) => {
  * @async
  */
 export const getGig = catchAsync(async (req, res) => {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const cacheKey = `gigs_all_${page}_${limit}`;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const cacheKey = `gigs_all_${page}_${limit}`;
 
-    const result = await getOrSetCache(cacheKey, async () => {
-      const gigs = await Gig.find()
-        .sort({ createdAt: -1 })
-        .populate(
-          "postedBy",
-          "username email profilePic onlineStatus can_review skills address location"
-        )
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .exec();
+  const result = await getOrSetCache(cacheKey, async () => {
+    const gigs = await Gig.find()
+      .sort({ createdAt: -1 })
+      .populate(
+        "postedBy",
+        "username email profilePic onlineStatus can_review skills address location"
+      )
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .exec();
 
-      const totalGigs = await Gig.countDocuments();
+    const totalGigs = await Gig.countDocuments();
 
-      return {
-        gig: gigs,
-        totalGigs,
-        totalPages: Math.ceil(totalGigs / limit),
-        currentPage: page
-      };
-    });
+    return {
+      gig: gigs,
+      totalGigs,
+      totalPages: Math.ceil(totalGigs / limit),
+      currentPage: page
+    };
+  });
 
-    res.status(200).json(result);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get gig" });
-  }
+  logger.info('Gigs retrieved', {
+    page,
+    gigCount: result.totalGigs,
+    userId: req.user?._id,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json(result);
 });
 
 

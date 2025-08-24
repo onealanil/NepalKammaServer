@@ -7,111 +7,122 @@ import Report from "../../../../models/Reports.js";
 import { emitAccountDeactivation } from "../../../../socketHandler.js";
 import { sendEmail } from "../helper/SendEmail.js";
 import firebase from "../../../firebase/index.js";
+import { StatusCodes } from "http-status-codes";
+import logger from "../../../utils/logger.js";
 
 //count all freelancers, job, gigs, and job_providers
-export const countAll = catchAsync(async (req, res, next) => {
-  try {
-    const freelancers = await User.countDocuments({ role: "job_seeker" });
-    const jobProviders = await User.countDocuments({ role: "job_provider" });
-    const job = await Job.countDocuments();
-    const gigs = await Gig.countDocuments();
-    res.status(200).json({ freelancers, jobProviders, job, gigs });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to count all" });
-  }
+export const countAll = catchAsync(async (req, res) => {
+  const freelancers = await User.countDocuments({ role: "job_seeker" });
+  const jobProviders = await User.countDocuments({ role: "job_provider" });
+  const job = await Job.countDocuments();
+  const gigs = await Gig.countDocuments();
+
+  logger.info('Admin retrieved count statistics', {
+    adminId: req.user._id,
+    freelancers,
+    jobProviders,
+    job,
+    gigs,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json({ freelancers, jobProviders, job, gigs });
 });
 
 //get all freelancers
-export const getAllFreelancers = catchAsync(async (req, res, next) => {
-  try {
-    const { verified_status, assending } = req.query;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 5;
+export const getAllFreelancers = catchAsync(async (req, res) => {
+  const { verified_status, assending } = req.query;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 5;
 
-    let query = {
-      role: "job_seeker",
-    };
+  let query = {
+    role: "job_seeker",
+  };
 
-    if (verified_status) {
-      query.isDocumentVerified = verified_status;
-    } else {
-      // If verified_status is not provided, remove the isDocumentVerified filter
-      delete query.isDocumentVerified;
-    }
-
-    let sort = {};
-
-    if (assending === "true") {
-      sort.createdAt = -1;
-    } else {
-      sort.createdAt = 1;
-    }
-
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-
-    const users = await User.find(query).sort(sort).skip(startIndex);
-
-    const totalUsers = await User.countDocuments(query);
-    const totalPages = Math.ceil(totalUsers / limit);
-
-    res.json({
-      users,
-      currentPage: page,
-      totalPages,
-      totalUsers,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get all freelancers" });
+  if (verified_status) {
+    query.isDocumentVerified = verified_status;
+  } else {
+    // If verified_status is not provided, remove the isDocumentVerified filter
+    delete query.isDocumentVerified;
   }
+
+  let sort = {};
+
+  if (assending === "true") {
+    sort.createdAt = -1;
+  } else {
+    sort.createdAt = 1;
+  }
+
+  const startIndex = (page - 1) * limit;
+
+  const users = await User.find(query).sort(sort).skip(startIndex).limit(limit);
+
+  const totalUsers = await User.countDocuments(query);
+  const totalPages = Math.ceil(totalUsers / limit);
+
+  logger.info('Admin retrieved freelancers', {
+    adminId: req.user._id,
+    page,
+    totalUsers,
+    verified_status,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json({
+    users,
+    currentPage: page,
+    totalPages,
+    totalUsers,
+  });
 });
 
 //get all job providers
-export const getAllJobProviders = catchAsync(async (req, res, next) => {
-  try {
-    const { verified_status, assending } = req.query;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 5;
+export const getAllJobProviders = catchAsync(async (req, res) => {
+  const { verified_status, assending } = req.query;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 5;
 
-    let query = {
-      role: "job_provider",
-    };
+  let query = {
+    role: "job_provider",
+  };
 
-    if (verified_status) {
-      query.isDocumentVerified = verified_status;
-    } else {
-      // If verified_status is not provided, remove the isDocumentVerified filter
-      delete query.isDocumentVerified;
-    }
-
-    let sort = {};
-
-    if (assending === "true") {
-      sort.createdAt = -1;
-    } else {
-      sort.createdAt = 1;
-    }
-
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-
-    const users = await User.find(query).sort(sort).skip(startIndex);
-
-    const totalUsers = await User.countDocuments(query);
-    const totalPages = Math.ceil(totalUsers / limit);
-
-    res.json({
-      users,
-      currentPage: page,
-      totalPages,
-      totalUsers,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get all job provider" });
+  if (verified_status) {
+    query.isDocumentVerified = verified_status;
+  } else {
+    // If verified_status is not provided, remove the isDocumentVerified filter
+    delete query.isDocumentVerified;
   }
+
+  let sort = {};
+
+  if (assending === "true") {
+    sort.createdAt = -1;
+  } else {
+    sort.createdAt = 1;
+  }
+
+  const startIndex = (page - 1) * limit;
+
+  const users = await User.find(query).sort(sort).skip(startIndex).limit(limit);
+
+  const totalUsers = await User.countDocuments(query);
+  const totalPages = Math.ceil(totalUsers / limit);
+
+  logger.info('Admin retrieved job providers', {
+    adminId: req.user._id,
+    page,
+    totalUsers,
+    verified_status,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json({
+    users,
+    currentPage: page,
+    totalPages,
+    totalUsers,
+  });
 });
 
 //get all payments

@@ -7,6 +7,8 @@ import User from "../../../models/User.js";
 import catchAsync from "../../utils/catchAsync.js";
 import createError from "../../utils/createError.js";
 import jwt from "jsonwebtoken";
+import { StatusCodes } from "http-status-codes";
+import logger from "../../utils/logger.js";
 
 /**
  * @function checkAuthentication
@@ -17,17 +19,32 @@ import jwt from "jsonwebtoken";
  */
 export const checkAuthentication = catchAsync(async (req, res) => {
   const user = await User.findById(req.user).select("-password");
-  if (!user) throw createError(401, "User not found");
+  if (!user) {
+    logger.warn('Authentication check failed - user not found', {
+      userId: req.user,
+      requestId: req.requestId
+    });
+    throw createError(StatusCodes.UNAUTHORIZED, "User not found");
+  }
 
   // Check if user's account is active
   if (user.userAccountStatus !== "Active") {
+    logger.warn('Authentication check failed - account inactive', {
+      userId: user._id,
+      requestId: req.requestId
+    });
     throw createError(
-      401,
+      StatusCodes.UNAUTHORIZED,
       "Your account is inactive. Please contact the admin."
     );
   }
 
-  res.status(200).json({
+  logger.info('Authentication check successful', {
+    userId: user._id,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json({
     status: "success",
     user,
   });
@@ -43,11 +60,20 @@ export const refreshToken = catchAsync(async (req, res) => {
   const token = req.cookies.refreshToken;
 
   if (!token) {
-    return res.status(401).json({ message: 'No token found' });
+    logger.warn('Refresh token attempt failed - no token found', {
+      requestId: req.requestId
+    });
+    return res.status(StatusCodes.UNAUTHORIZED).json({ message: 'No token found' });
   }
 
   jwt.verify(token, process.env.REFRESH_TOKEN_SECRET, (err, payload) => {
-    if (err) return res.status(403).json({ message: 'Invalid token' });
+    if (err) {
+      logger.warn('Refresh token attempt failed - invalid token', {
+        error: err.message,
+        requestId: req.requestId
+      });
+      return res.status(StatusCodes.FORBIDDEN).json({ message: 'Invalid token' });
+    }
 
     const newAccessToken = jwt.sign(
       { userId: payload.userId },
@@ -55,6 +81,11 @@ export const refreshToken = catchAsync(async (req, res) => {
       { expiresIn: '15m' }
     );
 
-    res.status(200).json({ accessToken: newAccessToken });
+    logger.info('Token refreshed successfully', {
+      userId: payload.userId,
+      requestId: req.requestId
+    });
+
+    res.status(StatusCodes.OK).json({ accessToken: newAccessToken });
   });
 })

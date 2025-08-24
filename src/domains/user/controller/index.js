@@ -30,6 +30,8 @@ import Job from "../../../../models/Job.js";
 import Gig from "../../../../models/Gig.js";
 import Review from "../../../../models/Review.js";
 import { generateAccessToken, generateRefreshToken } from "../../../utils/jwt.js";
+import { StatusCodes } from "http-status-codes";
+import logger from "../../../utils/logger.js";
 
 /**
  * @function createUser
@@ -40,63 +42,67 @@ import { generateAccessToken, generateRefreshToken } from "../../../utils/jwt.js
  * @throws - If an error occurs during the process, it throws an error with a message.
  */
 export const createUser = catchAsync(async (req, res) => {
-  try {
-    console.log(req.body)
-    const {
-      username,
-      email,
-      password,
-      role,
-      gender,
-      fcm_token,
-      security_answer,
-      location,
-      latitude,
-      longitude
-    } = req.body;
-    const findEmail = await User.findOne({ email });
-    const findUsername = await User.findOne({ username });
+  const {
+    username,
+    email,
+    password,
+    role,
+    gender,
+    fcm_token,
+    security_answer,
+    location,
+    latitude,
+    longitude
+  } = req.body;
 
-    if (findUsername && findUsername.isVerified === true) {
-      return res.status(422).json({ message: "Username already exists" });
-    }
-    if (findEmail && findEmail.isVerified === true) {
-      return res.status(422).json({ message: "Email already exists" });
-    }
-    if (findEmail && findEmail.isVerified === false) {
-      await User.findOneAndDelete({ email: findEmail.email });
-    }
+  logger.info('User registration attempt', {
+    email,
+    username,
+    role,
+    requestId: req.requestId
+  });
 
-    const hashedPassword = await hashPassword(password);
-    const hashedSecurityAnswer = await hashPassword(security_answer);
+  const findEmail = await User.findOne({ email });
+  const findUsername = await User.findOne({ username });
 
-    const signupUser = new User({
-      email,
-      password: hashedPassword,
-      username,
-      role,
-      gender,
-      isVerified: false,
-      fcm_token,
-      security_answer: hashedSecurityAnswer,
-      location,
-      address: {
-        coordinates: [longitude, latitude],
-      },
-    });
-
-    await signupUser
-      .save()
-      .then((result) => {
-        // handle account verification
-        sendOTPVerificationEmail(result, res);
-      })
-      .catch((err) => {
-        throw new Error(err);
-      });
-  } catch (err) {
-    throw new Error(err);
+  if (findUsername && findUsername.isVerified === true) {
+    return res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({ message: "Username already exists" });
   }
+  if (findEmail && findEmail.isVerified === true) {
+    return res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({ message: "Email already exists" });
+  }
+  if (findEmail && findEmail.isVerified === false) {
+    await User.findOneAndDelete({ email: findEmail.email });
+  }
+
+  const hashedPassword = await hashPassword(password);
+  const hashedSecurityAnswer = await hashPassword(security_answer);
+
+  const signupUser = new User({
+    email,
+    password: hashedPassword,
+    username,
+    role,
+    gender,
+    isVerified: false,
+    fcm_token,
+    security_answer: hashedSecurityAnswer,
+    location,
+    address: {
+      coordinates: [longitude, latitude],
+    },
+  });
+
+  const result = await signupUser.save();
+
+  logger.info('User created successfully, sending OTP', {
+    userId: result._id,
+    email,
+    requestId: req.requestId
+  });
+
+  // handle account verification
+  sendOTPVerificationEmail(result, res);
 });
 
 /**
@@ -212,58 +218,75 @@ export const resendOTP = catchAsync(async (req, res) => {
  */
 export const LoginUser = catchAsync(async (req, res) => {
   const { email, password } = req.body;
-  console.log(email, password)
+
+  logger.info('Login attempt', { email, requestId: req.requestId });
+
   if (!email || !password) {
-    return res.status(422).json({ message: "Something went wrong" });
+    return res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({ message: "Something went wrong" });
   }
+
   const findEmail = await User.findOne({ email });
   if (!findEmail || findEmail == null) {
-    return res.status(422).json({ message: "Email not found" });
-  } else {
-    if (findEmail.isVerified === true) {
-      const decryptPass = await bcrypt.compare(password, findEmail.password);
-      if (decryptPass) {
-        if (findEmail.userAccountStatus !== "Active") {
-          return res.status(401).json({
-            message: "Your account is inactive. Please contact the admin.",
-          });
-        }
+    logger.warn('Login failed - email not found', { email, requestId: req.requestId });
+    return res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({ message: "Email not found" });
+  }
 
-        // Generate tokens
-        const accessToken = generateAccessToken(findEmail._id);
-        const refreshToken = generateRefreshToken(findEmail._id);
-
-        findEmail.save();
-        const userInfo = {
-          _id: findEmail._id,
-          role: findEmail.role,
-          username: findEmail.username,
-          location: findEmail.location,
-          address: findEmail.address
-        };
-
-        res.cookie("refreshToken", refreshToken, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "strict",
-          maxAge: 7 * 24 * 60 * 60 * 1000,
-          path: "/",
+  if (findEmail.isVerified === true) {
+    const decryptPass = await bcrypt.compare(password, findEmail.password);
+    if (decryptPass) {
+      if (findEmail.userAccountStatus !== "Active") {
+        logger.warn('Login failed - account inactive', {
+          userId: findEmail._id,
+          email,
+          requestId: req.requestId
         });
-
-        res.status(200).json({
-          status: "success",
-          message: "Successfully, logged in",
-          accessToken,
-          user: userInfo,
+        return res.status(StatusCodes.UNAUTHORIZED).json({
+          message: "Your account is inactive. Please contact the admin.",
         });
-      } else {
-        return res
-          .status(422)
-          .json({ message: "Email or Password doesn't match" });
       }
+
+      // Generate tokens
+      const accessToken = generateAccessToken(findEmail._id);
+      const refreshToken = generateRefreshToken(findEmail._id);
+
+      await findEmail.save();
+      const userInfo = {
+        _id: findEmail._id,
+        role: findEmail.role,
+        username: findEmail.username,
+        location: findEmail.location,
+        address: findEmail.address
+      };
+
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: "/",
+      });
+
+      logger.info('Login successful', {
+        userId: findEmail._id,
+        email,
+        requestId: req.requestId
+      });
+
+      res.status(StatusCodes.OK).json({
+        status: "success",
+        message: "Successfully, logged in",
+        accessToken,
+        user: userInfo,
+      });
     } else {
-      return res.status(422).json({ message: "Your email is not verified!" });
+      logger.warn('Login failed - invalid password', { email, requestId: req.requestId });
+      return res
+        .status(StatusCodes.UNPROCESSABLE_ENTITY)
+        .json({ message: "Email or Password doesn't match" });
     }
+  } else {
+    logger.warn('Login failed - email not verified', { email, requestId: req.requestId });
+    return res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({ message: "Your email is not verified!" });
   }
 });
 
@@ -276,30 +299,41 @@ export const LoginUser = catchAsync(async (req, res) => {
  * @throws - If an error occurs during the process, it throws an error with a message.
  */
 export const forgetPassword = catchAsync(async (req, res) => {
-  try {
-    const { email, security_answer, password } = req.body;
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ message: "Email not found" });
-    }
+  const { email, security_answer, password } = req.body;
 
-    const isSecurityAnswerValid = await bcrypt.compare(
-      security_answer,
-      user.security_answer
-    );
+  logger.info('Password reset attempt', { email, requestId: req.requestId });
 
-    if (!isSecurityAnswerValid) {
-      return res.status(422).json({ message: "Security answer is incorrect" });
-    }
-
-    const hashedPassword = await hashPassword(password);
-    user.password = hashedPassword;
-    await user.save();
-
-    res.status(200).json({ message: "Password updated successfully" });
-  } catch (err) {
-    res.status(500).json({ message: "Failed to reset password" });
+  const user = await User.findOne({ email });
+  if (!user) {
+    logger.warn('Password reset failed - email not found', { email, requestId: req.requestId });
+    return res.status(StatusCodes.NOT_FOUND).json({ message: "Email not found" });
   }
+
+  const isSecurityAnswerValid = await bcrypt.compare(
+    security_answer,
+    user.security_answer
+  );
+
+  if (!isSecurityAnswerValid) {
+    logger.warn('Password reset failed - invalid security answer', {
+      email,
+      userId: user._id,
+      requestId: req.requestId
+    });
+    return res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({ message: "Security answer is incorrect" });
+  }
+
+  const hashedPassword = await hashPassword(password);
+  user.password = hashedPassword;
+  await user.save();
+
+  logger.info('Password reset successful', {
+    email,
+    userId: user._id,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json({ message: "Password updated successfully" });
 });
 
 /**
@@ -314,19 +348,27 @@ export const logoutUser = catchAsync(async (req, res) => {
   const refreshToken = req.cookies.refreshToken;
 
   if (!refreshToken) {
-    return res.status(401).json({ message: "Refresh token missing" });
+    return res.status(StatusCodes.UNAUTHORIZED).json({ message: "Refresh token missing" });
   }
 
   let decoded;
   try {
     decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
   } catch (err) {
-    return res.status(403).json({ message: "Invalid refresh token" });
+    logger.warn('Logout failed - invalid refresh token', {
+      error: err.message,
+      requestId: req.requestId
+    });
+    return res.status(StatusCodes.FORBIDDEN).json({ message: "Invalid refresh token" });
   }
 
   const user = await User.findById(decoded.userId);
   if (!user) {
-    return res.status(404).json({ message: "User not found" });
+    logger.warn('Logout failed - user not found', {
+      userId: decoded.userId,
+      requestId: req.requestId
+    });
+    return res.status(StatusCodes.NOT_FOUND).json({ message: "User not found" });
   }
 
   // Optional: clear FCM token and mark offline
@@ -342,7 +384,12 @@ export const logoutUser = catchAsync(async (req, res) => {
     path: "/",
   });
 
-  return res.status(200).json({ message: "Logged out successfully" });
+  logger.info('User logged out successfully', {
+    userId: user._id,
+    requestId: req.requestId
+  });
+
+  return res.status(StatusCodes.OK).json({ message: "Logged out successfully" });
 });
 
 /**
@@ -354,41 +401,49 @@ export const logoutUser = catchAsync(async (req, res) => {
  * @throws - If an error occurs during the process, it throws an error with a message.
  */
 export const editProfile = catchAsync(async (req, res) => {
-  try {
-    const id = req.params.id;
-    const {
+  const id = req.params.id;
+  const {
+    username,
+    title,
+    bio,
+    about_me,
+    skills,
+    location,
+    latitude,
+    longitude,
+  } = req.body;
+
+  logger.info('Profile edit request', {
+    userId: id,
+    username,
+    location,
+    requestId: req.requestId
+  });
+
+  const user = await User.findByIdAndUpdate(
+    id,
+    {
       username,
       title,
       bio,
+      location,
+      address: {
+        coordinates: [longitude, latitude],
+      },
       about_me,
       skills,
-      location,
-      latitude,
-      longitude,
-    } = req.body;
+    },
+    { new: true }
+  );
 
-    const user = await User.findByIdAndUpdate(
-      id,
-      {
-        username,
-        title,
-        bio,
-        location,
-        address: {
-          coordinates: [longitude, latitude],
-        },
-        about_me,
-        skills,
-      },
-      { new: true }
-    );
+  const { password, ...userWithoutPassword } = user.toObject();
 
-    const { password, ...userWithoutPassword } = user.toObject();
+  logger.info('Profile updated successfully', {
+    userId: id,
+    requestId: req.requestId
+  });
 
-    res.status(200).json({ user: userWithoutPassword });
-  } catch (err) {
-    throw new Error(err);
-  }
+  res.status(StatusCodes.OK).json({ user: userWithoutPassword });
 });
 
 /**
@@ -400,36 +455,42 @@ export const editProfile = catchAsync(async (req, res) => {
  * @returns - A JSON response indicating the success or failure of the profile picture update process.
  * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
  */
-export const updateProfilePicController = async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id);
-    // file get from client photo
-    const file = getDataUri(req.file);
-    // delete prev image
-    await cloudinary.v2.uploader.destroy(user.profilePic.public_id);
-    // update
-    const cdb = await cloudinary.v2.uploader.upload(file.content);
-    user.profilePic = {
-      public_id: cdb.public_id,
-      url: cdb.secure_url,
-    };
-    // save func
-    await user.save();
+export const updateProfilePicController = catchAsync(async (req, res) => {
+  const user = await User.findById(req.user._id);
 
-    res.status(200).send({
-      success: true,
-      public_id: cdb.public_id,
-      url: cdb.secure_url,
-      message: "Profile picture updated",
-    });
-  } catch (error) {
-    res.status(500).send({
-      success: false,
-      message: "Error In update profile pic API",
-      error,
-    });
+  logger.info('Profile picture update request', {
+    userId: req.user._id,
+    requestId: req.requestId
+  });
+
+  // file get from client photo
+  const file = getDataUri(req.file);
+  // delete prev image
+  if (user.profilePic?.public_id) {
+    await cloudinary.v2.uploader.destroy(user.profilePic.public_id);
   }
-};
+  // update
+  const cdb = await cloudinary.v2.uploader.upload(file.content);
+  user.profilePic = {
+    public_id: cdb.public_id,
+    url: cdb.secure_url,
+  };
+  // save func
+  await user.save();
+
+  logger.info('Profile picture updated successfully', {
+    userId: req.user._id,
+    publicId: cdb.public_id,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).send({
+    success: true,
+    public_id: cdb.public_id,
+    url: cdb.secure_url,
+    message: "Profile picture updated",
+  });
+});
 
 /**
  * @function updatePhoneNumber
@@ -439,45 +500,57 @@ export const updateProfilePicController = async (req, res) => {
  * @returns - The updated user data without the password filed and updated phone number.
  * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
  */
-export const updatePhoneNumber = async (req, res) => {
-  try {
-    const { phone } = req.body;
-    const existingUser = await User.findOne({
-      phoneNumber: phone,
-      _id: { $ne: req.user._id },
+export const updatePhoneNumber = catchAsync(async (req, res) => {
+  const { phone } = req.body;
+
+  logger.info('Phone number update request', {
+    userId: req.user._id,
+    phone,
+    requestId: req.requestId
+  });
+
+  const existingUser = await User.findOne({
+    phoneNumber: phone,
+    _id: { $ne: req.user._id },
+  });
+
+  if (existingUser) {
+    logger.warn('Phone number update failed - already exists', {
+      userId: req.user._id,
+      phone,
+      requestId: req.requestId
     });
-
-    if (existingUser) {
-      return res.status(400).send({
-        success: false,
-        message: "Phone number already exists",
-      });
-    }
-
-    const user = await User.findById(req.user._id);
-    if (!user) {
-      return res.status(400).send({
-        success: false,
-        message: "User not found, Login again!",
-      });
-    }
-
-    user.phoneNumber = phone;
-    await user.save();
-
-    return res.status(200).send({
-      success: true,
-      message: "Phone number updated",
-    });
-
-  } catch (error) {
-    return res.status(500).send({
+    return res.status(StatusCodes.BAD_REQUEST).send({
       success: false,
-      message: "Error In update phone number API",
-      error,
+      message: "Phone number already exists",
     });
   }
-};
+
+  const user = await User.findById(req.user._id);
+  if (!user) {
+    logger.warn('Phone number update failed - user not found', {
+      userId: req.user._id,
+      requestId: req.requestId
+    });
+    return res.status(StatusCodes.BAD_REQUEST).send({
+      success: false,
+      message: "User not found, Login again!",
+    });
+  }
+
+  user.phoneNumber = phone;
+  await user.save();
+
+  logger.info('Phone number updated successfully', {
+    userId: req.user._id,
+    requestId: req.requestId
+  });
+
+  return res.status(StatusCodes.OK).send({
+    success: true,
+    message: "Phone number updated",
+  });
+});
 
 /**
  * @function uploadDocuments

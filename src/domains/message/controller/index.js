@@ -3,96 +3,132 @@ import ConversationModel from "../../../../models/Conversation.js";
 import MessageModel from "../../../../models/Message.js";
 import firebase from "../../../firebase/index.js";
 import User from "../../../../models/User.js";
+import { StatusCodes } from "http-status-codes";
+import logger from "../../../utils/logger.js";
 
-export const createConversation = catchAsync(async (req, res, next) => {
-  try {
-    const senderId = req.body.senderId;
-    const receiverId = req.body.receiverId;
+export const createConversation = catchAsync(async (req, res) => {
+  const senderId = req.body.senderId;
+  const receiverId = req.body.receiverId;
 
-    const existingConversation = await ConversationModel.findOne({
-      conversation: { $all: [senderId, receiverId] },
+  logger.info('Conversation creation attempt', {
+    senderId,
+    receiverId,
+    requestId: req.requestId
+  });
+
+  const existingConversation = await ConversationModel.findOne({
+    conversation: { $all: [senderId, receiverId] },
+  });
+
+  if (existingConversation) {
+    logger.info('Existing conversation found', {
+      conversationId: existingConversation._id,
+      requestId: req.requestId
     });
-
-    if (existingConversation) {
-      return res.status(200).json({ conversation: existingConversation });
-    }
-    const conversation = new ConversationModel({
-      conversation: [senderId, receiverId],
-    });
-    await conversation.save();
-    res.status(200).json({ conversation });
-  } catch (err) {
-    res.status(500).json({ message: "Failed to create conversation" });
+    return res.status(StatusCodes.OK).json({ conversation: existingConversation });
   }
+
+  const conversation = new ConversationModel({
+    conversation: [senderId, receiverId],
+  });
+  await conversation.save();
+
+  logger.info('New conversation created', {
+    conversationId: conversation._id,
+    senderId,
+    receiverId,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json({ conversation });
 });
 
-export const getConversation = catchAsync(async (req, res, next) => {
-  try {
-    const userId = req.user._id;
-    const result = await ConversationModel.find({
-      conversation: { $in: [userId] },
+export const getConversation = catchAsync(async (req, res) => {
+  const userId = req.user._id;
+
+  const result = await ConversationModel.find({
+    conversation: { $in: [userId] },
+  })
+    .populate({
+      path: "conversation",
+      model: "User",
+      options: { strictPopulate: false },
+      select: "-password -savedPost -isVerified -bio",
     })
-      .populate({
-        path: "conversation",
-        model: "User",
-        options: { strictPopulate: false },
-        select: "-password -savedPost -isVerified -bio",
-      })
-      .exec();
+    .exec();
 
-    const filteredResult = result.filter((message) => {
-      if (message.conversation.some((conv) => conv._id.equals(userId))) {
-        message.conversation = message.conversation
-          .map((conv) => (conv._id.equals(userId) ? null : conv))
-          .filter((conv) => conv !== null);
-      }
-      return message;
-    });
+  const filteredResult = result.filter((message) => {
+    if (message.conversation.some((conv) => conv._id.equals(userId))) {
+      message.conversation = message.conversation
+        .map((conv) => (conv._id.equals(userId) ? null : conv))
+        .filter((conv) => conv !== null);
+    }
+    return message;
+  });
 
-    res.status(200).json({ result: filteredResult });
-  } catch (err) {
-    res.status(500).json({ message: "Failted to get Conversation" });
-  }
+  logger.info('Conversations retrieved', {
+    userId,
+    conversationCount: filteredResult.length,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json({ result: filteredResult });
 });
 
 // for message
-export const createMessage = catchAsync(async (req, res, next) => {
-  try {
-    const senderId = req.user._id;
-    const conversationId = req.body.conversationId;
-    const msg = req.body.msg;
-    const recipientId = req.body.recipientId;
-    const messages = await MessageModel.create({
-      senderId,
-      conversationId,
-      msg,
-      recipientId,
-    });
+export const createMessage = catchAsync(async (req, res) => {
+  const senderId = req.user._id;
+  const conversationId = req.body.conversationId;
+  const msg = req.body.msg;
+  const recipientId = req.body.recipientId;
 
-    const senderUser = await User.findById(senderId);
-    const recipientUser = await User.findById(recipientId);
+  logger.info('Message creation request', {
+    senderId,
+    recipientId,
+    conversationId,
+    requestId: req.requestId
+  });
 
-    const sendNotification = async () => {
-      try {
-        await firebase.messaging().send({
-          token: recipientUser?.fcm_token,
-          notification: {
-            title: `${senderUser?.username} messaged you 🎆💬`,
-            body: msg,
-          },
-        });
-      } catch (err) {
-        console.error(err);
-      }
-    };
+  const messages = await MessageModel.create({
+    senderId,
+    conversationId,
+    msg,
+    recipientId,
+  });
 
-    if (recipientUser?.fcm_token) {
-      await sendNotification();
+  const senderUser = await User.findById(senderId);
+  const recipientUser = await User.findById(recipientId);
+
+  const sendNotification = async () => {
+    try {
+      await firebase.messaging().send({
+        token: recipientUser?.fcm_token,
+        notification: {
+          title: `${senderUser?.username} messaged you 🎆💬`,
+          body: msg,
+        },
+      });
+    } catch (err) {
+      logger.error('Firebase message notification failed', {
+        error: err.message,
+        recipientId,
+        requestId: req.requestId
+      });
     }
-    res.status(200).json({ messages });
-  } catch (err) {
-    res.status(500).json({ message: "Failed to create new message" });
+  };
+
+  if (recipientUser?.fcm_token) {
+    await sendNotification();
   }
+
+  logger.info('Message created successfully', {
+    messageId: messages._id,
+    senderId,
+    recipientId,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json({ messages });
 });
 
 //get message of conversation of user

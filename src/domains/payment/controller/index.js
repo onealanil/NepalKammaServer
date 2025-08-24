@@ -13,6 +13,8 @@ import { getDataUris } from "../../../utils/Features.js";
 import { clearCache } from "../../../utils/cacheService.js";
 import catchAsync from "../../../utils/catchAsync.js";
 import cloudinary from "cloudinary";
+import { StatusCodes } from "http-status-codes";
+import logger from "../../../utils/logger.js";
 
 /**
  * @function createPayment
@@ -24,43 +26,60 @@ import cloudinary from "cloudinary";
  * @async
  */
 export const createPayment = catchAsync(async (req, res) => {
-  try {
-    const {job, amount, recieverNumber } = req.body;
+  const {job, amount, recieverNumber } = req.body;
 
-    // Store payment record internally
-    const payment = await Payment.create({
-      PaymentBy: req.body.paymentBy,
-      PaymentTo: req.body.paymentTo,
-      paymentType: req.body.paymentMethod,
-      job,
-      amount,
-      recieverNumber
+  logger.info('Payment creation request', {
+    jobId: job,
+    amount,
+    paymentBy: req.body.paymentBy,
+    paymentTo: req.body.paymentTo,
+    userId: req.user._id,
+    requestId: req.requestId
+  });
+
+  // Store payment record internally
+  const payment = await Payment.create({
+    PaymentBy: req.body.paymentBy,
+    PaymentTo: req.body.paymentTo,
+    paymentType: req.body.paymentMethod,
+    job,
+    amount,
+    recieverNumber
+  });
+
+  const updatedJob = await Job.findByIdAndUpdate(
+    job,
+    { job_status: "Paid" },
+    { new: true }
+  );
+
+  if (!updatedJob) {
+    logger.warn('Payment creation failed - job not found', {
+      jobId: job,
+      userId: req.user._id,
+      requestId: req.requestId
     });
-
-    const updatedJob = await Job.findByIdAndUpdate(
-      job,
-      { job_status: "Paid" },
-      { new: true }
-    );
-
-    if (!updatedJob) {
-      return res.status(404).json({ message: "Job not found" });
-    }
-
-    clearCache([
-      `user_jobs${req.user._id}`
-    ])
-
-    res.status(200).json({
-      success: true,
-      message: "Payment recorded and job marked as Paid",
-      payment,
-      job: updatedJob
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to record payment" });
+    return res.status(StatusCodes.NOT_FOUND).json({ message: "Job not found" });
   }
+
+  clearCache([
+    `user_jobs${req.user._id}`
+  ]);
+
+  logger.info('Payment created successfully', {
+    paymentId: payment._id,
+    jobId: job,
+    amount,
+    userId: req.user._id,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: "Payment recorded and job marked as Paid",
+    payment,
+    job: updatedJob
+  });
 });
 
 

@@ -19,6 +19,8 @@ import User from "../../../../models/User.js";
 import { emitNotification } from "../../../../socketHandler.js";
 import catchAsync from "../../../utils/catchAsync.js";
 import firebase from "../../../firebase/index.js";
+import { StatusCodes } from "http-status-codes";
+import logger from "../../../utils/logger.js";
 
 /**
  * @function createReview
@@ -29,57 +31,72 @@ import firebase from "../../../firebase/index.js";
  * @throws - Throws an error if the review creation fails or if the user is not found.
  */
 export const createReview = catchAsync(async (req, res) => {
-  try {
-    const { reviewedBy, reviewedTo, review, rating } = req.body;
-    const getReview = await Review.create({
-      reviewedBy,
-      reviewedTo,
-      review,
-      rating,
-    });
+  const { reviewedBy, reviewedTo, review, rating } = req.body;
 
-    const reviewedByUser = await User.findById(reviewedBy);
-    const reviewedToUser = await User.findById(reviewedTo);
-    // Check if the user was found and has a profile picture
-    if (!reviewedByUser || !reviewedByUser.profilePic.url) {
-      return res(400).json({ message: "Something went wrong" });
-    }
-    if (!reviewedToUser) {
-      return res(400).json({ message: "Something went wrong" });
-    }
+  logger.info('Review creation attempt', {
+    reviewedBy,
+    reviewedTo,
+    rating,
+    requestId: req.requestId
+  });
 
-    emitNotification(req.app.get("io"), getReview.reviewedTo.toString(), {
-      senderId: reviewedBy,
-      recipientId: reviewedTo,
-      notification: review,
-      profilePic: reviewedByUser.profilePic.url,
-      senderUsername: reviewedByUser.username,
-      type: "review",
-    });
+  const getReview = await Review.create({
+    reviewedBy,
+    reviewedTo,
+    review,
+    rating,
+  });
 
-    const sendNotification = async () => {
-      try {
-        await firebase.messaging().send({
-          token: reviewedToUser?.fcm_token,
-          notification: {
-            title: "Someone reviwed you 🎆😍",
-            body: review,
-          },
-        });
-      } catch (err) {
-        console.error(err);
-      }
-    };
+  const reviewedByUser = await User.findById(reviewedBy);
+  const reviewedToUser = await User.findById(reviewedTo);
 
-    if (reviewedToUser.fcm_token) {
-      await sendNotification();
-    }
-
-    res.status(200).json(getReview);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to create  review" });
+  // Check if the user was found and has a profile picture
+  if (!reviewedByUser || !reviewedByUser.profilePic.url) {
+    return res.status(StatusCodes.BAD_REQUEST).json({ message: "Something went wrong" });
   }
+  if (!reviewedToUser) {
+    return res.status(StatusCodes.BAD_REQUEST).json({ message: "Something went wrong" });
+  }
+
+  emitNotification(req.app.get("io"), getReview.reviewedTo.toString(), {
+    senderId: reviewedBy,
+    recipientId: reviewedTo,
+    notification: review,
+    profilePic: reviewedByUser.profilePic.url,
+    senderUsername: reviewedByUser.username,
+    type: "review",
+  });
+
+  const sendNotification = async () => {
+    try {
+      await firebase.messaging().send({
+        token: reviewedToUser?.fcm_token,
+        notification: {
+          title: "Someone reviwed you 🎆😍",
+          body: review,
+        },
+      });
+    } catch (err) {
+      logger.error('Firebase notification failed', {
+        error: err.message,
+        reviewedTo,
+        requestId: req.requestId
+      });
+    }
+  };
+
+  if (reviewedToUser.fcm_token) {
+    await sendNotification();
+  }
+
+  logger.info('Review created successfully', {
+    reviewId: getReview._id,
+    reviewedBy,
+    reviewedTo,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json(getReview);
 });
 
 /**
@@ -90,45 +107,55 @@ export const createReview = catchAsync(async (req, res) => {
  * @returns - A JSON response with the list of reviews, pagination info, or an error message.
  * @throws - Throws an error if the retrieval fails.
  */
-export const getReviewByProvider = catchAsync(async (req, res, next) => {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = 5;
-    const skip = (page - 1) * limit;
+export const getReviewByProvider = catchAsync(async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = 5;
+  const skip = (page - 1) * limit;
+  const providerId = req.params.id;
 
-    // Get total count for pagination info
-    const totalReviews = await Review.countDocuments({
-      reviewedTo: req.params.id,
-    });
+  logger.info('Reviews retrieval request', {
+    providerId,
+    page,
+    requestId: req.requestId
+  });
 
-    const reviews = await Review.find({
-      reviewedTo: req.params.id,
-    })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("reviewedBy", "-password")
-      .populate("reviewedTo", "-password");
+  // Get total count for pagination info
+  const totalReviews = await Review.countDocuments({
+    reviewedTo: providerId,
+  });
 
-    const totalPages = Math.ceil(totalReviews / limit);
-    const hasNextPage = page < totalPages;
-    const hasPrevPage = page > 1;
+  const reviews = await Review.find({
+    reviewedTo: providerId,
+  })
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .populate("reviewedBy", "-password")
+    .populate("reviewedTo", "-password");
 
-    res.status(200).json({
-      reviews,
-      pagination: {
-        currentPage: page,
-        totalPages,
-        totalReviews,
-        hasNextPage,
-        hasPrevPage,
-        limit
-      }
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get reviews" });
-  }
+  const totalPages = Math.ceil(totalReviews / limit);
+  const hasNextPage = page < totalPages;
+  const hasPrevPage = page > 1;
+
+  logger.info('Reviews retrieved successfully', {
+    providerId,
+    reviewCount: reviews.length,
+    totalReviews,
+    page,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json({
+    reviews,
+    pagination: {
+      currentPage: page,
+      totalPages,
+      totalReviews,
+      hasNextPage,
+      hasPrevPage,
+      limit
+    }
+  });
 });
 
 /**

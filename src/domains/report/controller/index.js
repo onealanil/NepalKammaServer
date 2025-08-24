@@ -8,6 +8,8 @@
  */
 import Report from "../../../../models/Reports.js";
 import catchAsync from "../../../utils/catchAsync.js";
+import { StatusCodes } from "http-status-codes";
+import logger from "../../../utils/logger.js";
 
 /**
  * @function createReport
@@ -17,18 +19,28 @@ import catchAsync from "../../../utils/catchAsync.js";
  * @returns - A JSON response with the created report or an error message.
  * @throws - Throws an error if the report creation fails or if the user is not found.
  */
-export const createReport = catchAsync(async (req, res, next) => {
-  try {
-    const { reportedBy, reportedTo, report } = req.body;
-    const reportData = await Report.create({
-      reportedBy,
-      reportedTo,
-      report,
-    });
+export const createReport = catchAsync(async (req, res) => {
+  const { reportedBy, reportedTo, report } = req.body;
 
-    res.status(200).json({ reportData });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to create notifications" });
-  }
+  logger.info('Report creation request', {
+    reportedBy,
+    reportedTo,
+    userId: req.user?._id,
+    requestId: req.requestId
+  });
+
+  const reportData = await Report.create({
+    reportedBy,
+    reportedTo,
+    report,
+  });
+
+  logger.info('Report created successfully', {
+    reportId: reportData._id,
+    reportedBy,
+    reportedTo,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json({ reportData });
 });

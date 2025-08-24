@@ -27,15 +27,15 @@
  */
 
 import express from "express";
-import bodyParser from "body-parser";
 import cors from "cors";
 import cloudinary from "cloudinary";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
 import path from "path";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
-import connectMongo from "./config/connection.js";
 import { updateJobVisibility } from "./src/utils/BackgroundTask.js";
+import { notFoundHandler } from "./src/utils/notFound.js";
 
 // Routes
 import user from "./src/routes/User.js";
@@ -48,11 +48,15 @@ import Payment from "./src/routes/Payment.js";
 import Review from "./src/routes/Review.js";
 import Notification from "./src/routes/Notification.js";
 import Report from "./src/routes/Report.js";
+import { errorHandler } from "./src/utils/errorHandler.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Create Express app
 const app = express();
+
+//helmet configuration
+app.use(helmet());
 
 // CORS configuration
 const corsOptions = {
@@ -84,9 +88,6 @@ const corsOptions = {
 // ---------- Handling CORS Issue --------------------
 app.use(cors(corsOptions));
 
-// Handle preflight requests
-app.options('*', cors(corsOptions));
-
 // Add headers manually as backup
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin);
@@ -104,10 +105,8 @@ app.use((req, res, next) => {
 /**
  * Using the necessary packages
  */
-app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
-app.use(bodyParser.json());
 app.use(cookieParser());
 
 // Serve static files
@@ -157,6 +156,11 @@ app.use("/api/v1/notification", Notification);
 
 // routes for report
 app.use("/api/v1/report", Report);
+
+//handle not found routes
+app.use(notFoundHandler);
+
+app.use(errorHandler);
 
 // Khalti payment gateway
 // app.post("/charge", function (req, res) {

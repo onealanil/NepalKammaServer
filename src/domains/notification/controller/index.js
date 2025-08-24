@@ -1,59 +1,80 @@
 import NotificationModel from "../../../../models/Notification.js";
 import catchAsync from "../../../utils/catchAsync.js";
+import { StatusCodes } from "http-status-codes";
+import logger from "../../../utils/logger.js";
 
-export const createNotification = catchAsync(async (req, res, next) => {
-  try {
-    const { senderId, recipientId, notification, type } = req.body;
-    const getNotification = await NotificationModel.create({
-      senderId,
-      recipientId,
-      notification,
-      type,
-    });
-    res.status(200).json(getNotification);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to create notifications" });
-  }
+export const createNotification = catchAsync(async (req, res) => {
+  const { senderId, recipientId, notification, type } = req.body;
+
+  logger.info('Notification creation request', {
+    senderId,
+    recipientId,
+    type,
+    requestId: req.requestId
+  });
+
+  const getNotification = await NotificationModel.create({
+    senderId,
+    recipientId,
+    notification,
+    type,
+  });
+
+  logger.info('Notification created successfully', {
+    notificationId: getNotification._id,
+    senderId,
+    recipientId,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json(getNotification);
 });
 
-export const getNotificationByReceiver = catchAsync(async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const getNotification = await NotificationModel.find({
-      recipientId: id,
-    })
-      .sort({ createdAt: -1 })
-      .populate("senderId", "-password");
-    res.status(200).json(getNotification);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get notifications" });
-  }
+export const getNotificationByReceiver = catchAsync(async (req, res) => {
+  const { id } = req.params;
+
+  const getNotification = await NotificationModel.find({
+    recipientId: id,
+  })
+    .sort({ createdAt: -1 })
+    .populate("senderId", "-password");
+
+  logger.info('Notifications retrieved', {
+    recipientId: id,
+    notificationCount: getNotification.length,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json(getNotification);
 });
 
 //get unread message count for all
-export const getUnreadNotificationCount = catchAsync(async (req, res, next) => {
-  try {
-    const result = await NotificationModel.find({
-      recipientId: req.user._id,
-      isRead: false,
-    });
-    res.status(200).json({ result: result.length});
-  } catch (err) {
-    res.status(500).json({ message: "Failed to get unread message count" });
-  }
+export const getUnreadNotificationCount = catchAsync(async (req, res) => {
+  const result = await NotificationModel.find({
+    recipientId: req.user._id,
+    isRead: false,
+  });
+
+  logger.info('Unread notification count retrieved', {
+    userId: req.user._id,
+    unreadCount: result.length,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json({ result: result.length});
 });
 
 //set read notification
-export const setRead = catchAsync(async (req, res, next) => {
-  try {
-    await NotificationModel.updateMany(
-      { recipientId: req.user._id },
-      { isRead: true }
-    );
-    res.status(200).json({ message: "All notifications are read" });
-  } catch (err) {
-    res.status(500).json({ message: "Failed to set all notifications read" });
-  }
+export const setRead = catchAsync(async (req, res) => {
+  await NotificationModel.updateMany(
+    { recipientId: req.user._id },
+    { isRead: true }
+  );
+
+  logger.info('All notifications marked as read', {
+    userId: req.user._id,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.OK).json({ message: "All notifications are read" });
 });
