@@ -17,6 +17,8 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import configureSocket from "./socketHandler.js";
 import app from "./app.js";
+import connectMongo from "./config/connection.js";
+import logger from "./src/utils/logger.js";
 
 /**
  * Clustering server.js
@@ -69,31 +71,57 @@ import app from "./app.js";
  * 
  * 
  */
-const httpServer = createServer(app);
-
-// Socket.io configuration
-const io = new Server(httpServer, {
-  cors: {
-    origin: "*", // Allow all origins for testing
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
-  allowEIO3: true, // Allow Engine.IO v3 clients
-  transports: ['websocket', 'polling']
-});
-
-// Configure socket.io
-configureSocket(io);
-
-// Attach io to app for use in routes
-app.set("io", io);
-
-const PORT = process.env.PORT || 8000;
-const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
-// const HOST = "0.0.0.0";
 
 
-// Start the server1
-httpServer.listen(PORT, HOST, () => {
-  console.log(`Server started on ${HOST}:${PORT}`);
-});
+async function startServer() {
+  try {
+    await connectMongo();
+
+    const httpServer = createServer(app);
+
+    // Socket.io configuration
+    const io = new Server(httpServer, {
+      cors: {
+        origin: "*", // Allow all origins for testing
+        methods: ["GET", "POST"],
+        credentials: true,
+      },
+      allowEIO3: true, // Allow Engine.IO v3 clients
+      transports: ['websocket', 'polling']
+    });
+
+    // Configure socket.io
+    configureSocket(io);
+
+    // Attach io to app for use in routes
+    app.set("io", io);
+
+    const PORT = process.env.PORT || 8000;
+    const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
+    // const HOST = "0.0.0.0";
+
+
+    // Start the server1
+    const server = httpServer.listen(PORT, HOST, () => {
+      console.log(`Server started on ${HOST}:${PORT}`);
+    });
+
+    process.on("unhandledRejection", (err) => {
+      logger.error(`Unhandled Rejection: ${err.name}, ${err.message}`);
+      server.close(() => {
+        process.exit(1);
+      });
+    });
+
+    process.on("SIGTERM", () => {
+      logger.info("Server shutting down.");
+      server.close(() => process.exit(0));
+    });
+
+  } catch (error) {
+    logger.error("Failed to start server:", error);
+    process.exit(1);
+  }
+}
+
+startServer();

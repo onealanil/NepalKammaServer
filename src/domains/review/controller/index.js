@@ -48,7 +48,7 @@ export const createReview = catchAsync(async (req, res) => {
       return res(400).json({ message: "Something went wrong" });
     }
 
-    emitNotification(req.io, getReview.reviewedTo.toString(), {
+    emitNotification(req.app.get("io"), getReview.reviewedTo.toString(), {
       senderId: reviewedBy,
       recipientId: reviewedTo,
       notification: review,

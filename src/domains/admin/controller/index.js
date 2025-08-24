@@ -350,7 +350,7 @@ export const deactivateUser = catchAsync(async (req, res, next) => {
       { $set: { visibility: "private" } }
     );
 
-    emitAccountDeactivation(req.io, userId.toString(), {
+    emitAccountDeactivation(req.app.get("io"), userId.toString(), {
       message: "Your account has been deactivated by the admin.",
     });
 

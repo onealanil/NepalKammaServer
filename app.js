@@ -30,7 +30,6 @@ import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
 import cloudinary from "cloudinary";
-import requestp from "request-promise";
 import cookieParser from "cookie-parser";
 import path from "path";
 import { dirname } from "path";
@@ -114,9 +113,6 @@ app.use(cookieParser());
 // Serve static files
 app.use(express.static(path.join(__dirname, "public")));
 
-// Database connection
-connectMongo();
-
 // Cloudinary Config
 cloudinary.v2.config({
   cloud_name: process.env.CLOUDINARY_NAME,
@@ -163,34 +159,34 @@ app.use("/api/v1/notification", Notification);
 app.use("/api/v1/report", Report);
 
 // Khalti payment gateway
-app.post("/charge", function (req, res) {
-  var KHALTI_VERIFY = "https://khalti.com/api/v2/payment/verify/";
-  let options = {
-    method: "POST",
-    uri: KHALTI_VERIFY,
-    body: JSON.stringify({
-      token: req.body.token,
-      amount: req.body.amount,
-    }),
-    headers: {
-      Authorization: `Key ${process.env.TEST_SECRET_KEY}`,
-      "Content-Type": "application/json",
-    },
-  };
-  requestp(options)
-    .then((result) => {
-      res.jsonp({
-        data: result,
-        status: "success",
-      });
-    })
-    .catch((error) => {
-      res.status(500).send({
-        error: error.response.data,
-        status: "failed",
-      });
-    });
-});
+// app.post("/charge", function (req, res) {
+//   var KHALTI_VERIFY = "https://khalti.com/api/v2/payment/verify/";
+//   let options = {
+//     method: "POST",
+//     uri: KHALTI_VERIFY,
+//     body: JSON.stringify({
+//       token: req.body.token,
+//       amount: req.body.amount,
+//     }),
+//     headers: {
+//       Authorization: `Key ${process.env.TEST_SECRET_KEY}`,
+//       "Content-Type": "application/json",
+//     },
+//   };
+//   requestp(options)
+//     .then((result) => {
+//       res.jsonp({
+//         data: result,
+//         status: "success",
+//       });
+//     })
+//     .catch((error) => {
+//       res.status(500).send({
+//         error: error.response.data,
+//         status: "failed",
+//       });
+//     });
+// });
 
 app.get("/", (req, res) => {
   res.json({

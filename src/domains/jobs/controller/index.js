@@ -112,7 +112,7 @@ export const createJob = catchAsync(async (req, res) => {
     await NotificationModel.insertMany(notifications); experiesIndate
     notifications.forEach((notification) => {
       if (notification.onlineStatus) {
-        emitNotification(req.io, notification.recipientId.toString(), {
+        emitNotification(req.app.get("io"), notification.recipientId.toString(), {
           senderId: notification.senderId,
           recipientId: notification.recipientId,
           notification: notification.notification,
@@ -185,7 +185,7 @@ export const createJob = catchAsync(async (req, res) => {
     await NotificationModel.insertMany(locationNotifications);
     locationNotifications.forEach((notification) => {
       if (notification.onlineStatus) {
-        emitNotification(req.io, notification.recipientId.toString(), {
+        emitNotification(req.app.get("io"), notification.recipientId.toString(), {
           senderId: notification.senderId,
           recipientId: notification.recipientId,
           notification: notification.notification,
@@ -694,6 +694,8 @@ export const getSingleJob = catchAsync(async (req, res) => {
       return res.status(400).json({ message: "Job ID is required" });
     }
 
+  
+
     const cacheKey = `single_job_${jobId}`;
 
     const result = await getOrSetCache(cacheKey, async () => {
@@ -717,6 +719,11 @@ export const getSingleJob = catchAsync(async (req, res) => {
 
     if (!result) {
       return res.status(404).json({ message: "Job not found" });
+    }
+
+    // Check if job is private and status is pending
+    if (result.visibility === "private" || result.job_status !== "Pending") {
+      return res.status(400).json({ message: "Access denied: Job is private" });
     }
 
     res.status(200).json({
