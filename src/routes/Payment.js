@@ -11,6 +11,7 @@ import {
   updateKhaltiNumber,
 } from "../domains/payment/controller/index.js";
 import { multipleUpload } from "../domains/auth/middlewares/Multer.js";
+import { normalLimiter } from "../services/normalRoutes.js";
 const router = express.Router();
 
 /**
@@ -21,7 +22,7 @@ const router = express.Router();
  */
 router
   .route("/createPayment")
-  .post(protect, permission(["job_provider"]), createPayment);
+  .post(normalLimiter, protect, permission(["job_provider"]), createPayment);
 
 /**
  * @description This route is used to get payment by provider.
@@ -32,7 +33,7 @@ router
 
 router
   .route("/getPaymentByProvider")
-  .get(protect, permission(["job_seeker"]), getPaymentByProvider);
+  .get(normalLimiter, protect, permission(["job_seeker"]), getPaymentByProvider);
 
 /**
  * @description This route is used to request payment.
@@ -43,7 +44,7 @@ router
  */
 router
   .route("/requestPayment/:id")
-  .put(protect, permission(["job_seeker"]), multipleUpload, requestPayment);
+  .put(normalLimiter, protect, permission(["job_seeker"]), multipleUpload, requestPayment);
 
 /**
  * @description This route is used to update Khalti number.
@@ -55,6 +56,6 @@ router
 
 router
   .route("/updateKhalitNumber/:id")
-  .put(protect, permission(["job_seeker"]), updateKhaltiNumber);
+  .put(normalLimiter, protect, permission(["job_seeker"]), updateKhaltiNumber);
 
 export default router;

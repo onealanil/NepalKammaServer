@@ -5,6 +5,7 @@
 import express from "express";
 import { protect } from "../domains/auth/middlewares/auth.js";
 import { createReport } from "../domains/report/controller/index.js";
+import { normalLimiter } from "../services/normalRoutes.js";
 
 const router = express.Router();
 
@@ -13,7 +14,7 @@ const router = express.Router();
  * @route POST /api/v1/report/createReport
  * @access Private
  */
-router.route("/createReport").post(protect, createReport);
+router.route("/createReport").post(normalLimiter, protect, createReport);
 
 export default router;
         

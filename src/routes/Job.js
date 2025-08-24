@@ -21,6 +21,7 @@ import {
   createJobValidation,
   createJobValidationResult,
 } from "../validators/JobValidators.js";
+import { normalLimiter } from "../services/normalRoutes.js";
 const router = express.Router();
 
 /**
@@ -32,6 +33,7 @@ const router = express.Router();
 router
   .route("/createJob")
   .post(
+    normalLimiter,
     protect,
     permission(["job_provider"]),
     createJobValidation,
@@ -43,14 +45,14 @@ router
  * @route GET /api/v1/job
  * @access Private
  */
-router.route(`/`).get(protect, getJob);
+router.route(`/`).get(normalLimiter, protect, getJob);
 
 /**
  * @description This route is used to get a job by user.
  * @route GET /api/v1/
  * @access Private
  */
-router.route(`/getSingleUserJob/:id`).get(protect, getSingleUserJobs);
+router.route(`/getSingleUserJob/:id`).get(normalLimiter, protect, getSingleUserJobs);
 
 /**
  * @description This route is used to get the nearby jobs based on latitude and longitude.
@@ -59,26 +61,26 @@ router.route(`/getSingleUserJob/:id`).get(protect, getSingleUserJobs);
  * @param {number} latitude - The latitude of the user's location.
  * @param {number} longitude - The longitude of the user's location.
  */
-router.route(`/getNearbyJob/:latitude/:longitude`).get(protect, nearBy);
+router.route(`/getNearbyJob/:latitude/:longitude`).get(normalLimiter, protect, nearBy);
 /**
  * @description This route is used to get recommended jobs.
  * @route GET /api/v1/job/getRecommendedJob
  * @access Private
  */
-router.route(`/getRecommendedJob`).get(protect, recommendationJobs);
+router.route(`/getRecommendedJob`).get(normalLimiter, protect, recommendationJobs);
 
 /**
  * @description This route is used to get the 5 recent jobs
  * @route GET /api/v1/job/getRecentJob
  */
-router.route(`/getRecentJob`).get(protect, getRecentPublicJobs)
+router.route(`/getRecentJob`).get(normalLimiter, protect, getRecentPublicJobs)
 
 /**
  * @description This route is used to search for jobs.
  * @route GET /api/v1/job/searchjob
  * @access Private
  */
-router.route(`/searchjob`).get(protect, searchJob);
+router.route(`/searchjob`).get(normalLimiter, protect, searchJob);
 /**
  * @description This route is used to update the status of a job.
  * @route PUT /api/v1/job/updateJobStatus/:jobId
@@ -88,7 +90,7 @@ router.route(`/searchjob`).get(protect, searchJob);
  */
 router
   .route(`/updateJobStatus/:jobId`)
-  .put(protect, permission(["job_provider"]), updateJobStatus);
+  .put(normalLimiter, protect, permission(["job_provider"]), updateJobStatus);
 
 /**
  * @description This route is used to get completed jobs.
@@ -99,7 +101,7 @@ router
  */
 router
   .route(`/completedJobs`)
-  .get(protect, permission(["job_provider"]), completedJobs);
+  .get(normalLimiter, protect, permission(["job_provider"]), completedJobs);
 
 /**
  * @description This route is used to delete a job.
@@ -110,7 +112,7 @@ router
  */
 router
   .route(`/deleteJob/:jobId`)
-  .delete(protect, permission(["job_provider"]), deleteJobs);
+  .delete(normalLimiter, protect, permission(["job_provider"]), deleteJobs);
 
 /**
  * @function this route is used to fetch a single job
@@ -118,6 +120,6 @@ router
  * @access Private
  * @permission job_seeker
  */
-router.route(`/:jobId`).get(protect, permission(["job_seeker"]), getSingleJob)
+router.route(`/:jobId`).get(normalLimiter, protect, permission(["job_seeker"]), getSingleJob)
 
 export default router;

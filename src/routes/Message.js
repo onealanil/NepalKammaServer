@@ -9,27 +9,60 @@ import {
   getUnreadMessageCount,
   setRead,
 } from "../domains/message/controller/index.js";
+import { normalLimiter } from "../services/normalRoutes.js";
 const router = express.Router();
 
-// create conversation
-router.route("/conversation").post(protect, createConversation);
+/**
+ * @description This route is used to create a conversation.
+ * @route POST /api/v1/message/conversation
+ * @access Private
+ */
+router.route("/conversation").post(normalLimiter, protect, createConversation);
 
-// get all conversation
-router.route("/getConversation").get(protect, getConversation);
 
-// create message
-router.route("/createMessage").post(protect, createMessage);
+/**
+ * @description This route is used to get all conversation.
+ * @route GET /api/v1/message/getConversation
+ * @access Private
+ */
+router.route("/getConversation").get(normalLimiter, protect, getConversation);
 
-//get messages
-router.route("/messagesCombo/:id").get(protect, getMessages);
+/**
+ * @description This route is used to create a message.
+ * @route POST /api/v1/message/createMessage
+ * @access Private
+ */
+router.route("/createMessage").post(normalLimiter, protect, createMessage);
 
-//last messages
-router.route("/lastMessages/:id").get(protect, getLastMessage);
+/**
+ * @description This route is used to get all messages of a conversation.
+ * @route GET /api/v1/message/messagesCombo/:id
+ * @access Private
+ */
+router.route("/messagesCombo/:id").get(normalLimiter, protect, getMessages);
 
-//read all message
-router.route("/readAllMessage/:id").put(protect, setRead);
+/**
+ * @description This route is used to get the last message of a conversation.
+ * @route GET /api/v1/message/lastMessages/:id
+ * @access Private
+ * @param {string} id - The ID of the conversation.
+ */
+router.route("/lastMessages/:id").get(normalLimiter, protect, getLastMessage);
 
-//count unread message
-router.route("/unreadMessage").get(protect, getUnreadMessageCount);
+
+/**
+ * @description This route is used to set all messages as read.
+ * @route PUT /api/v1/message/readAllMessage/:id
+ * @access Private
+ * @param {string} id - The ID of the conversation.
+ */
+router.route("/readAllMessage/:id").put(normalLimiter, protect, setRead);
+
+/**
+ * @description This route is used to get the count of unread messages.
+ * @route GET /api/v1/message/unreadMessage
+ * @access Private
+ */
+router.route("/unreadMessage").get(normalLimiter, protect, getUnreadMessageCount);
 
 export default router;

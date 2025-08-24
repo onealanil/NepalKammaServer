@@ -9,6 +9,7 @@ import {
   getAverageRating,
   getReviewByProvider,
 } from "../domains/review/controller/index.js";
+import { normalLimiter } from "../services/normalRoutes.js";
 
 const router = express.Router();
 
@@ -17,7 +18,7 @@ const router = express.Router();
  * @route POST /api/v1/review/createReview
  * @access Private
  */
-router.route("/createReview").post(protect, createReview);
+router.route("/createReview").post(normalLimiter, protect, createReview);
 
 /**
  * @description Get reviews by provider route
@@ -25,7 +26,7 @@ router.route("/createReview").post(protect, createReview);
  * @param id - The ID of the provider to get reviews for
  * @access Private
  */
-router.route("/getReviewByProvider/:id").get(protect, getReviewByProvider);
+router.route("/getReviewByProvider/:id").get(normalLimiter, protect, getReviewByProvider);
 
 /**
  * @description Get average rating route
@@ -33,6 +34,6 @@ router.route("/getReviewByProvider/:id").get(protect, getReviewByProvider);
  * @param id - The ID of the provider to get the average rating for
  * @access Private
  */
-router.route("/getAverageRating/:id").get(protect, getAverageRating);
+router.route("/getAverageRating/:id").get(normalLimiter, protect, getAverageRating);
 
 export default router;

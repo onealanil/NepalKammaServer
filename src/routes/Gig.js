@@ -19,6 +19,7 @@ import {
   createGigValidationResult,
 } from "../validators/GigValidators.js";
 import { multipleUpload } from "../domains/auth/middlewares/Multer.js";
+import { normalLimiter } from "../services/normalRoutes.js";
 const router = express.Router();
 
 /**
@@ -31,6 +32,7 @@ const router = express.Router();
 router
   .route("/creategig/:id")
   .put(
+    normalLimiter,
     protect,
     permission(["job_seeker"]),
     createGigValidation,
@@ -46,7 +48,7 @@ router
  */
 router
   .route("/upload-photo")
-  .post(protect, multipleUpload, permission(["job_seeker"]), uploadImages);
+  .post(normalLimiter, protect, multipleUpload, permission(["job_seeker"]), uploadImages);
 /**
  * @description This route is used to get nearby gigs based on latitude and longitude.
  * @route GET /api/v1/gig/getNearbyGig/:latitude/:longitude
@@ -55,7 +57,7 @@ router
  * @param {string} latitude - The latitude of the user's location.
  * @param {string} longitude - The longitude of the user's location.
  */
-router.route(`/getNearbyGig/:latitude/:longitude`).get(protect, nearByGig);
+router.route(`/getNearbyGig/:latitude/:longitude`).get(normalLimiter, protect, nearByGig);
 
 
 /**
@@ -63,14 +65,14 @@ router.route(`/getNearbyGig/:latitude/:longitude`).get(protect, nearByGig);
  * @route GET /api/v1/gig/searchgig
  * @access Private
  */
-router.route("/").get(protect, getGig);
+router.route("/").get(normalLimiter, protect, getGig);
 
 /**
  * @description This route is used to search for gigs based on a query.
  * @route GET /api/v1/gig/searchgig
  * @access Private
  */
-router.route(`/searchgig`).get(protect, searchGig);
+router.route(`/searchgig`).get(normalLimiter, protect, searchGig);
 
 /**
  * @description This route is used to get a single user's gigs.
@@ -78,16 +80,22 @@ router.route(`/searchgig`).get(protect, searchGig);
  * @access Private
  * @param {string} id - The ID of the user whose gigs are to be retrieved.
  */
-router.route(`/getSingleUserGig/:id`).get(protect, getSingleUserGigs);
+router.route(`/getSingleUserGig/:id`).get(normalLimiter, protect, getSingleUserGigs);
 
 /**
  * @description This route is used to delete a sing users gigs
  * @route DELETE /api/v1/gig/deleteUsergig/:id
  * @access private
  */
-router.route(`/deleteUsergig/:id`).delete(protect, deleteSingleGig);
+router.route(`/deleteUsergig/:id`).delete(normalLimiter, protect, deleteSingleGig);
 
-router.route("/:gigId").get(protect, getSingleGig);
+/**
+ * @description This route is used to get a single gig.
+ * @route GET /api/v1/gig/:gigId
+ * @access Private
+ * @param {string} gigId - The ID of the gig to retrieve.
+ */
+router.route("/:gigId").get(normalLimiter, protect, getSingleGig);
 
 
 export default router;

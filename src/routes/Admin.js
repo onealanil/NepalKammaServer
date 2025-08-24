@@ -18,62 +18,63 @@ import {
   sendPushNotification,
   verifyDocument,
 } from "../domains/admin/controller/index.js";
+import { normalLimiter } from "../services/normalRoutes.js";
 const router = express.Router();
 
-router.route("/countAll").get(protect, permission(["admin"]), countAll);
+router.route("/countAll").get(normalLimiter, protect, permission(["admin"]), countAll);
 
 router
   .route("/getAllFreelancers")
-  .get(protect, permission(["admin"]), getAllFreelancers);
+  .get(normalLimiter, protect, permission(["admin"]), getAllFreelancers);
 
 router
   .route("/getAllJobProviders")
-  .get(protect, permission(["admin"]), getAllJobProviders);
+  .get(normalLimiter, protect, permission(["admin"]), getAllJobProviders);
 
 router
   .route("/getAllPayments")
-  .get(protect, permission(["admin"]), getAllPayments);
+  .get(normalLimiter, protect, permission(["admin"]), getAllPayments);
 
-router.route("/getAllJobs").get(protect, permission(["admin"]), getAllJobs);
+router.route("/getAllJobs").get(normalLimiter, protect, permission(["admin"]), getAllJobs);
 
-router.route("/getAllGigs").get(protect, permission(["admin"]), getAllGigs);
+router.route("/getAllGigs").get(normalLimiter, protect, permission(["admin"]), getAllGigs);
 
 router
   .route("/completedPayment/:paymentId")
-  .put(protect, permission(["admin"]), completedPayment);
+  .put(normalLimiter, protect, permission(["admin"]), completedPayment);
 
 router
   .route("/verifyDocument/:userId")
-  .put(protect, permission(["admin"]), verifyDocument);
+  .put(normalLimiter, protect, permission(["admin"]), verifyDocument);
 
 router
   .route("/rejectDocument/:userId")
-  .put(protect, permission(["admin"]), rejectDocument);
+  .put(normalLimiter, protect, permission(["admin"]), rejectDocument);
 
 router
   .route("/getAllReports")
-  .get(protect, permission(["admin"]), getAllReports);
+  .get(normalLimiter, protect, permission(["admin"]), getAllReports);
 
 router
   .route("/deactivateUser/:userId")
-  .put(protect, permission(["admin"]), deactivateUser);
+  .put(normalLimiter, protect, permission(["admin"]), deactivateUser);
 
 router
   .route("/activateUser/:userId")
-  .put(protect, permission(["admin"]), activateUser);
+  .put(normalLimiter, protect, permission(["admin"]), activateUser);
 
 router
   .route("/getallDeactivatedUsers")
-  .get(protect, permission(["admin"]), getAllDeactivatedAccounts);
+  .get(normalLimiter, protect, permission(["admin"]), getAllDeactivatedAccounts);
 
 router
   .route("/getUserGrowth")
-  .get(protect, permission(["admin"]), getUserGrowth);
+  .get(normalLimiter, protect, permission(["admin"]), getUserGrowth);
 
 router
   .route("/sendNotification")
-  .post(protect, permission(["admin"]), sendPushNotification);
+  .post(normalLimiter, protect, permission(["admin"]), sendPushNotification);
 
-router.route("/getUsersGraph").get(protect, permission(["admin"]), getNewUsers);
+router.route("/getUsersGraph").get(normalLimiter, protect, permission(["admin"]), getNewUsers);
 
 export default router;

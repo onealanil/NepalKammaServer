@@ -38,6 +38,13 @@ import {
   multipleUpload,
   singleUpload,
 } from "../domains/auth/middlewares/Multer.js";
+import {
+  authLimiter,
+  passwordResetLimiter,
+  signupLimiter,
+  otpLimiter
+} from "../services/authRoutes.js";
+import { normalLimiter } from "../services/normalRoutes.js";
 const router = express.Router();
 
 /**
@@ -47,42 +54,42 @@ const router = express.Router();
  */
 router
   .route("/signup")
-  .post(signUpValidation, signupValidationResult, createUser);
+  .post(signupLimiter, signUpValidation, signupValidationResult, createUser);
 
 /**
  * @description User verification route
  * @route POST /api/v1/user/verify
  * @access Public
  */
-router.route("/verify").post(verifyUser);
+router.route("/verify").post(otpLimiter, verifyUser);
 
 /**
  * @description resend OTP route
  * @route POST /api/v1/user/resend-otp
  * @access Public
  */
-router.route("/resend-otp").post(resendOTP);
+router.route("/resend-otp").post(otpLimiter, resendOTP);
 
 /**
  * @description User login route with validation with express-validator
  * @route POST /api/v1/user/login
  * @access Public
  */
-router.route("/login").post(loginValidation, signupValidationResult, LoginUser);
+router.route("/login").post(authLimiter, loginValidation, signupValidationResult, LoginUser);
 
 /**
  * @description Forget password route
  * @route PUT /api/v1/user/forgetPassword
- * @access PUblic
+ * @access Public
  */
-router.route("/forgetPassword").put(forgetPassword);
+router.route("/forgetPassword").put(passwordResetLimiter, forgetPassword);
 
 /**
  * @description Logout user route
  * @route GET /api/v1/user/logout
  * @access Private
  */
-router.route("/logout").get(logoutUser);
+router.route("/logout").get(normalLimiter, logoutUser);
 
 /**
  * @description Editing the details of the user
@@ -91,7 +98,7 @@ router.route("/logout").get(logoutUser);
  * @param {id} id - User ID
  *
  */
-router.route(`/edit-profile/:id`).put(protect, editProfile);
+router.route(`/edit-profile/:id`).put(normalLimiter, protect, editProfile);
 
 /**
  * * @description Update user profile picture route
@@ -100,21 +107,21 @@ router.route(`/edit-profile/:id`).put(protect, editProfile);
  */
 router
   .route("/update-picture")
-  .put(protect, singleUpload, updateProfilePicController);
+  .put(normalLimiter, protect, singleUpload, updateProfilePicController);
 
 /**
  * * @description Update user phone number route
  * * @route PUT /api/v1/user/update-phone
  * * @access Private
  */
-router.route("/update-phone").put(protect, updatePhoneNumber);
+router.route("/update-phone").put(normalLimiter, protect, updatePhoneNumber);
 
 /**
  * * @description Upload documents route
  * * @route POST /api/v1/user/upload-document
  * * @access Private
  */
-router.route("/upload-document").post(protect, multipleUpload, uploadDocuments);
+router.route("/upload-document").post(normalLimiter, protect, multipleUpload, uploadDocuments);
 
 /**
  * * @description Get single user route
@@ -122,7 +129,7 @@ router.route("/upload-document").post(protect, multipleUpload, uploadDocuments);
  * * @access Private
  * @param {id} id - User ID
  */
-router.route("/user/:id").get(protect, getSingleUser);
+router.route("/user/:id").get(normalLimiter, protect, getSingleUser);
 
 /**
  * * @description Get single user provider route
@@ -130,7 +137,7 @@ router.route("/user/:id").get(protect, getSingleUser);
  * * @access Private
  * @param {id} id - User ID
  */
-router.route("/user/provider/:id").get(protect, getSingleUserProvider);
+router.route("/user/provider/:id").get(normalLimiter, protect, getSingleUserProvider);
 
 /**
  * * @description Get single user seeker route
@@ -138,14 +145,14 @@ router.route("/user/provider/:id").get(protect, getSingleUserProvider);
  * * @access Private
  * @param {id} id - User ID
  */
-router.route("/user/seeker/:id").get(protect, getSingleUserSeeker);
+router.route("/user/seeker/:id").get(normalLimiter, protect, getSingleUserSeeker);
 
 /**
  * * @description Get all job seekers route
  * * @route GET /api/v1/user/job-seeker
  * * @access Private
  */
-router.route("/job-seeker").get(protect, getAllJobSeekers);
+router.route("/job-seeker").get(normalLimiter, protect, getAllJobSeekers);
 
 /**
  * * @description Get nearby job seekers route
@@ -156,7 +163,7 @@ router.route("/job-seeker").get(protect, getAllJobSeekers);
  */
 router
   .route(`/getNearbyJobSeeker/:latitude/:longitude`)
-  .get(protect, nearByJobSeekers);
+  .get(normalLimiter, protect, nearByJobSeekers);
 
 /**
  * * @description Search user route
@@ -164,7 +171,7 @@ router
  * * @access Private
  * @param {username} username - Username to search for
  */
-router.route(`/search-user/:username`).get(protect, searchUser);
+router.route(`/search-user/:username`).get(normalLimiter, protect, searchUser);
 
 /**
  * * @description Count all job posted by a job provider
@@ -174,7 +181,7 @@ router.route(`/search-user/:username`).get(protect, searchUser);
  */
 router
   .route(`/count-job-posted/:jobProviderId`)
-  .get(protect, permission(["job_provider"]), countAll);
+  .get(normalLimiter, protect, permission(["job_provider"]), countAll);
 
 /**
  * * @description Save job route
@@ -182,33 +189,33 @@ router
  * * @access Private
  * @param {id} id - Job ID to save
  */
-router.route(`/save-job/:id`).put(protect, saveJob);
+router.route(`/save-job/:id`).put(normalLimiter, protect, saveJob);
 /**
  * * @description Unsave job route
  * * @route PUT /api/v1/user/unsave-job/:id
  * * @access Private
  * @param {id} id - Job ID to unsave
  */
-router.route(`/unsave-job/:id`).put(protect, unsaveJob);
+router.route(`/unsave-job/:id`).put(normalLimiter, protect, unsaveJob);
 /**
  * * @description Get saved jobs route
  * * @route GET /api/v1/user/saved-jobs
  * * @access Private
  */
-router.route(`/saved-jobs`).get(protect, getSavedJobs);
+router.route(`/saved-jobs`).get(normalLimiter, protect, getSavedJobs);
 
 /**
  * * @description Get top rated job providers route
  * * @route GET /api/v1/user/top-rated-job-provider
  * * @access Private
  */
-router.route(`/top-rated-job-provider`).get(protect, getTopRatedJobProviders);
+router.route(`/top-rated-job-provider`).get(normalLimiter, protect, getTopRatedJobProviders);
 
 /**
  * * @description Get top rated job seekers route
  * * @route GET /api/v1/user/top-rated-job-seeker
  * * @access Private
  */
-router.route(`/top-rated-job-seeker`).get(protect, getTopRatedJobSeeker);
+router.route(`/top-rated-job-seeker`).get(normalLimiter, protect, getTopRatedJobSeeker);
 
 export default router;
