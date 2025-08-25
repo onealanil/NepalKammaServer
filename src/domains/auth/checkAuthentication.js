@@ -31,7 +31,7 @@ export const checkAuthentication = catchAsync(async (req, res) => {
   if (user.userAccountStatus !== "Active") {
     logger.warn('Authentication check failed - account inactive', {
       userId: user._id,
-      requestId: req.requestId
+      requestId: req.requestId``
     });
     throw createError(
       StatusCodes.UNAUTHORIZED,
@@ -58,7 +58,7 @@ export const checkAuthentication = catchAsync(async (req, res) => {
  */
 export const refreshToken = catchAsync(async (req, res) => {
   const token = req.cookies.refreshToken;
-
+  console.log("this is token", token);
   if (!token) {
     logger.warn('Refresh token attempt failed - no token found', {
       requestId: req.requestId

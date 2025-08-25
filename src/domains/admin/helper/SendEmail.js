@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
+import logger from "../../../utils/logger.js";
 
-export const sendEmail = async ({ email }, res) => {
+export const sendEmail = async ({ email }, res, req) => {
   try {
     const transporter = nodemailer.createTransport({
       host: 'smtp.ethereal.email',
@@ -29,8 +30,15 @@ export const sendEmail = async ({ email }, res) => {
     };
 
     transporter.sendMail(mailOptions);
-    console.log("Email sent");
+    logger.info('Email sent successfully', {
+      email,
+      requestId: req.requestId
+    });
   } catch (err) {
+    logger.error('Email failed', {
+      error: err.message,
+      requestId: req.requestId
+    });
     res.json({
       status: "failed",
       message: "Something went wrong",

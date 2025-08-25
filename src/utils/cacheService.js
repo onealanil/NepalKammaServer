@@ -1,5 +1,6 @@
 // utils/cacheService.js
 import NodeCache from "node-cache";
+import logger from "./logger.js";
 
 // Create a new cache instance with standard TTL of 10 minutes
 // and checkperiod of 12 minutes (to delete expired entries)
@@ -15,11 +16,11 @@ const cache = new NodeCache({ stdTTL: 600, checkperiod: 720 });
 export const getOrSetCache = async (key, fetchFunction, ttl) => {
   const cachedData = cache.get(key);
   if (cachedData) {
-    console.log(`Cache hit for key: ${key}`);
+    logger.info('Cache hit', { key, requestId: 'cache_service' });
     return cachedData;
   }
 
-  console.log(`Cache miss for key: ${key}`);
+  logger.info('Cache miss', { key, requestId: 'cache_service' });
   const freshData = await fetchFunction();
   
   // Convert Mongoose documents to plain objects before caching

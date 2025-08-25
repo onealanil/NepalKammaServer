@@ -76,6 +76,7 @@ export const createGig = catchAsync(async (req, res) => {
   const gig = await Gig.findById(gig_id);
 
   if (!gig) {
+    logger.warn('Gig not found', { gigId: gig_id, userId: req.user._id, requestId: req.requestId });
     return res.status(StatusCodes.NOT_FOUND).json({ message: "Gig not found" });
   }
 
@@ -173,43 +174,44 @@ export const getGig = catchAsync(async (req, res) => {
  * @async
  */
 export const nearByGig = catchAsync(async (req, res) => {
-  try {
-    const { latitude, longitude } = req.params;
-    const cacheKey = `gigs_nearby_${latitude}_${longitude}`;
+  const { latitude, longitude } = req.params;
+  const cacheKey = `gigs_nearby_${latitude}_${longitude}`;
 
-    const result = await getOrSetCache(cacheKey, async () => {
-      const nearByUser = await User.aggregate([
-        {
-          $geoNear: {
-            near: {
-              type: "Point",
-              coordinates: [parseFloat(longitude), parseFloat(latitude)],
-            },
-            key: "address.coordinates",
-            maxDistance: parseFloat(10000),
-            distanceField: "dist.calculated",
-            spherical: true,
+  const result = await getOrSetCache(cacheKey, async () => {
+    const nearByUser = await User.aggregate([
+      {
+        $geoNear: {
+          near: {
+            type: "Point",
+            coordinates: [parseFloat(longitude), parseFloat(latitude)],
           },
+          key: "address.coordinates",
+          maxDistance: parseFloat(10000),
+          distanceField: "dist.calculated",
+          spherical: true,
         },
-      ]).exec();
+      },
+    ]).exec();
 
-      const userIds = nearByUser.map((user) => user._id);
-      const nearByGigs = await Gig.find({ postedBy: { $in: userIds } })
-        .sort({ createdAt: -1 })
-        .populate(
-          "postedBy",
-          "username email profilePic onlineStatus can_review skills address location"
-        )
-        .exec();
+    const userIds = nearByUser.map((user) => user._id);
+    const nearByGigs = await Gig.find({ postedBy: { $in: userIds } })
+      .sort({ createdAt: -1 })
+      .populate(
+        "postedBy",
+        "username email profilePic onlineStatus can_review skills address location"
+      )
+      .exec();
 
-      return { nearByGigs };
-    }, 300); // 5 minute TTL for location-based gigs
-
-    res.status(200).json(result);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get near by gig" });
-  }
+    return { nearByGigs };
+  }, 300); // 5 minute TTL for location-based gigs
+  logger.info('Nearby gigs retrieved', {
+    latitude,
+    longitude,
+    gigCount: result.nearByGigs?.length || 0,
+    userId: req.user?._id,
+    requestId: req.requestId
+  });
+  res.status(200).json(result);
 });
 
 /**
@@ -222,91 +224,97 @@ export const nearByGig = catchAsync(async (req, res) => {
  * @throws - If an error occurs during the search process, a JSON response with an error message is sent.
  * @async
  */
-export const searchGig = catchAsync(async (req, res, next) => {
-  console.log("this is req.query", req.query);
-  try {
-    const {
-      text,
-      category,
-      lng,
-      lat,
-      distance,
-      sortByRating,
-      sortByPriceHighToLow,
-      sortByPriceLowToHigh,
-      page = 1,
-      limit = 5
-    } = req.query;
+export const searchGig = catchAsync(async (req, res) => {
+  const {
+    text,
+    category,
+    lng,
+    lat,
+    distance,
+    sortByRating,
+    sortByPriceHighToLow,
+    sortByPriceLowToHigh,
+    page = 1,
+    limit = 5
+  } = req.query;
 
-    let cacheKeyParts = [`search`];
+  let cacheKeyParts = [`search`];
 
-    if (text) cacheKeyParts.push(`text_${text}`);
-    if (category) cacheKeyParts.push(`cat_${category}`);
-    if (lng && lat) cacheKeyParts.push(`loc_${lng}_${lat}`);
-    if (distance) cacheKeyParts.push(`dist_${distance}`);
-    if (sortByRating === "true") cacheKeyParts.push(`sort_rating`);
-    if (sortByPriceHighToLow === "true") cacheKeyParts.push(`sort_price_desc`);
-    if (sortByPriceLowToHigh === "true") cacheKeyParts.push(`sort_price_asc`);
+  if (text) cacheKeyParts.push(`text_${text}`);
+  if (category) cacheKeyParts.push(`cat_${category}`);
+  if (lng && lat) cacheKeyParts.push(`loc_${lng}_${lat}`);
+  if (distance) cacheKeyParts.push(`dist_${distance}`);
+  if (sortByRating === "true") cacheKeyParts.push(`sort_rating`);
+  if (sortByPriceHighToLow === "true") cacheKeyParts.push(`sort_price_desc`);
+  if (sortByPriceLowToHigh === "true") cacheKeyParts.push(`sort_price_asc`);
 
-    cacheKeyParts.push(`page_${page}_limit_${limit}`);
+  cacheKeyParts.push(`page_${page}_limit_${limit}`);
 
-    const cacheKey = cacheKeyParts.join('_');
-    const result = await getOrSetCache(cacheKey, async () => {
-      let query = {};
+  const cacheKey = cacheKeyParts.join('_');
+  const result = await getOrSetCache(cacheKey, async () => {
+    let query = {};
 
-      if (text) {
-        const regex = new RegExp(text, "i");
-        query.$or = [
-          { title: { $regex: regex } },
-          { gig_description: { $regex: regex } },
-        ];
+    if (text) {
+      const regex = new RegExp(text, "i");
+      query.$or = [
+        { title: { $regex: regex } },
+        { gig_description: { $regex: regex } },
+      ];
+    }
+
+    if (category) {
+      const existingCategory = await Gig.findOne({ category });
+      if (existingCategory) {
+        query.category = category;
+      } else {
+        logger.info('No gigs found for category', {
+          category,
+          userId: req.user?._id,
+          requestId: req.requestId
+        });
+        return {
+          success: true,
+          gig: [],
+          totalGigs: 0,
+          currentPage: page,
+          totalPages: 0,
+        };
       }
+    }
 
-      if (category) {
-        const existingCategory = await Gig.findOne({ category });
-        if (existingCategory) {
-          query.category = category;
-        } else {
-          return {
-            success: true,
-            gig: [],
-            totalGigs: 0,
-            currentPage: page,
-            totalPages: 0,
-          };
-        }
-      }
+    let sort = {};
+    if (sortByRating === "true") sort.rating = -1;
+    else if (sortByPriceHighToLow === "true") sort.price = -1;
+    else if (sortByPriceLowToHigh === "true") sort.price = 1;
+    else sort.createdAt = -1;
 
-      let sort = {};
-      if (sortByRating === "true") sort.rating = -1;
-      else if (sortByPriceHighToLow === "true") sort.price = -1;
-      else if (sortByPriceLowToHigh === "true") sort.price = 1;
-      else sort.createdAt = -1;
+    const gigs = await Gig.find(query)
+      .sort(sort)
+      .populate(
+        "postedBy",
+        "username email profilePic onlineStatus can_review skills address location"
+      )
+      .skip((page - 1) * limit)
+      .limit(limit);
 
-      const gigs = await Gig.find(query)
-        .sort(sort)
-        .populate(
-          "postedBy",
-          "username email profilePic onlineStatus can_review skills address location"
-        )
-        .skip((page - 1) * limit)
-        .limit(limit);
+    const totalGigs = await Gig.countDocuments(query);
 
-      const totalGigs = await Gig.countDocuments(query);
-
-      return {
-        success: true,
-        gig: gigs,
-        totalGigs,
-        currentPage: page,
-        totalPages: Math.ceil(totalGigs / limit),
-      };
-    }, 180); // 3 minute TTL for search results
-
-    res.status(200).json(result);
-  } catch (error) {
-    next(error);
-  }
+    return {
+      success: true,
+      gig: gigs,
+      totalGigs,
+      currentPage: page,
+      totalPages: Math.ceil(totalGigs / limit),
+    };
+  }, 180); // 3 minute TTL for search results
+  logger.info('Gig search completed', {
+    text,
+    category,
+    hasLocation: !!(lng && lat),
+    userId: req.user?._id,
+    requestId: req.requestId
+  });
+  res.status(200).json(result);
 });
 
 
@@ -320,26 +328,22 @@ export const searchGig = catchAsync(async (req, res, next) => {
  * @async
  */
 export const getSingleUserGigs = catchAsync(async (req, res) => {
-  try {
-    const { id } = req.params;
-    const cacheKey = `user_gigs_${id}`;
+  const { id } = req.params;
+  const cacheKey = `user_gigs_${id}`;
 
-    const result = await getOrSetCache(cacheKey, async () => {
-      const userGigs = await Gig.find({ postedBy: id })
-        .sort({ createdAt: -1 })
-        .populate(
-          "postedBy",
-          "username email profilePic onlineStatus can_review skills address location"
-        )
-        .exec();
-      return { userGigs };
-    }, 600); // 10 minute TTL for user gigs
+  const result = await getOrSetCache(cacheKey, async () => {
+    const userGigs = await Gig.find({ postedBy: id })
+      .sort({ createdAt: -1 })
+      .populate(
+        "postedBy",
+        "username email profilePic onlineStatus can_review skills address location"
+      )
+      .exec();
+    return { userGigs };
+  }, 600); // 10 minute TTL for user gigs
 
-    res.status(200).json(result);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get user gigs" });
-  }
+  logger.info('User gigs retrieved', { userId: id, gigCount: result.userGigs?.length || 0, userId: req.user?._id, requestId: req.requestId });
+  res.status(200).json(result);
 });
 
 /**
@@ -352,18 +356,23 @@ export const getSingleUserGigs = catchAsync(async (req, res) => {
  * @async
  */
 export const deleteSingleGig = catchAsync(async (req, res) => {
-  try {
-    const { id } = req.params;
+  const { id } = req.params;
 
-    const gig = await Gig.findById(id);
+  const gig = await Gig.findById(id);
 
-    if (!gig) {
-      return res.status(404).json({ message: "Gig not found" });
-    }
+  if (!gig) {
+    logger.warn('Gig not found', { gigId: id, userId: req.user?._id, requestId: req.requestId });
+    return res.status(404).json({ message: "Gig not found" });
+  }
 
-    if (req.user && gig.postedBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: "Unauthorized to delete this gig" });
-    }
+  if (req.user && gig.postedBy.toString() !== req.user._id.toString()) {
+    logger.warn('Unauthorized to delete gig', {
+      gigId: id,
+      userId: req.user._id,
+      requestId: req.requestId
+    });
+    return res.status(403).json({ message: "Unauthorized to delete this gig" });
+  }
     if (gig.images && gig.images.length > 0) {
       for (const image of gig.images) {
         await cloudinary.v2.uploader.destroy(image.public_id);
@@ -377,12 +386,13 @@ export const deleteSingleGig = catchAsync(async (req, res) => {
       'gigs_all_1_10',
       `user_gigs_${gig.postedBy}`,
     ]);
-
+    logger.info('Gig deleted successfully', {
+      gigId: gig._id,
+      userId: req.user._id,
+      requestId: req.requestId
+    });
     res.status(200).json({ message: "Gig deleted successfully" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to delete gig" });
-  }
+
 });
 
 // /**
@@ -392,7 +402,6 @@ export const deleteSingleGig = catchAsync(async (req, res) => {
 //  */
 
 export const getSingleGig = catchAsync(async (req, res) => {
-  try {
     const { gigId } = req.params;
     const cacheKey = `single_gig_${gigId}`;
 
@@ -412,17 +421,22 @@ export const getSingleGig = catchAsync(async (req, res) => {
     });
 
     if (!result) {
+      logger.warn('Gig not found', {
+        gigId,
+        userId: req.user?._id,
+        requestId: req.requestId
+      });
       return res.status(404).json({ message: "Gig not found" });
     }
-
+    logger.info('Gig retrieved successfully', {
+      gigId,
+      userId: req.user?._id,
+      requestId: req.requestId
+    });
     res.status(200).json({
       success: true,
       gig: result,
     });
-  } catch (err) {
-    console.error("Error fetching single gig:", err);
-    res.status(500).json({ message: "Failed to get the gig" });
-  }
 });
 
 

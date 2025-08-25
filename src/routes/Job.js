@@ -22,6 +22,7 @@ import {
   createJobValidationResult,
 } from "../validators/JobValidators.js";
 import { normalLimiter } from "../services/normalRoutes.js";
+import { captchaVerification } from "../utils/captchaVerification.js";
 const router = express.Router();
 
 /**
@@ -38,6 +39,7 @@ router
     permission(["job_provider"]),
     createJobValidation,
     createJobValidationResult,
+    captchaVerification,
     createJob
   );
 /**

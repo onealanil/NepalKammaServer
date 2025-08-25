@@ -5,6 +5,7 @@
 
 import MessageModel from "./models/Message.js";
 import User from "./models/User.js";
+import logger from "./src/utils/logger.js";
 
 // Use Map for better performance with frequent lookups
 const onlineUsers = new Map(); // socketId -> {userId}
@@ -28,11 +29,11 @@ const addNewUser = async (userId, socketId) => {
     // Prevent duplicate entries
     if (!Array.from(onlineUsers.values()).some(user => user.userId === userId)) {
       onlineUsers.set(socketId, { userId });
-      console.log(`User ${userId} connected via ${socketId}`);
+      logger.info(`User ${userId} connected via ${socketId}`);
       emitOnlineUsers();
     }
   } catch (err) {
-    console.error("Error adding user:", err);
+    logger.error("Error adding user:", err);
   }
 };
 
@@ -46,7 +47,7 @@ const removeUser = async (socketId) => {
     if (userData) {
       const user = await User.findById(userData.userId);
       if (user) {
-        console.log(`User ${user.username} is offline.`);
+        logger.info(`User ${user.username} is offline.`);
         user.onlineStatus = false;
         await user.save();
       }
@@ -54,7 +55,7 @@ const removeUser = async (socketId) => {
       emitOnlineUsers();
     }
   } catch (err) {
-    console.error("Error removing user:", err);
+    logger.error("Error removing user:", err);
   }
 };
 
@@ -97,7 +98,7 @@ export const emitNotification = (io, recipientId, notification) => {
       notification
     );
   } else {
-    console.log(`User ${recipientId} is not connected.`);
+    logger.info(`User ${recipientId} is not connected.`);
   }
 };
 
@@ -109,10 +110,10 @@ export const emitNotification = (io, recipientId, notification) => {
 export const emitAccountDeactivation = (io, recipientId) => {
   const recipient = getUser(recipientId);
   if (recipient && recipient.socketId) {
-    console.log("Emitting deactivation to:", recipientId, recipient.socketId);
+    logger.info("Emitting deactivation to:", recipientId, recipient.socketId);
     io.to(recipient.socketId).emit("accountDeactivation");
   } else {
-    console.log(`User ${recipientId} is not connected.`);
+    logger.info(`User ${recipientId} is not connected.`);
   }
 };
 
@@ -125,11 +126,11 @@ export default (socketIo) => {
 
   // Add error handling for the connection
   io.engine.on("connection_error", (err) => {
-    console.error("Socket connection error:", err);
+    logger.error("Socket connection error:", err);
   });
 
   io.on("connection", (socket) => {
-    console.log(socket.id, "connected.");
+    logger.info(socket.id, "connected.");
 
     // Heartbeat mechanism to detect dead connections
     let heartbeatInterval = setInterval(() => {
@@ -143,7 +144,7 @@ export default (socketIo) => {
     });
 
     socket.on("addUser", (data) => {
-      console.log(data.username, "is online.");
+      logger.info(data.username, "is online.");
       addNewUser(data.userId, socket.id);
     });
 
@@ -153,18 +154,18 @@ export default (socketIo) => {
 
     socket.on("conversationOpened", async ({ conversationId, senderId }) => {
       try {
-        console.log(conversationId, senderId, "conversation opened.");
+        logger.info(conversationId, senderId, "conversation opened.");
         await MessageModel.updateMany(
           { conversationId, senderId: { $ne: senderId } },
           { isRead: true }
         );
       } catch (err) {
-        console.error("Error updating messages:", err);
+        logger.error("Error updating messages:", err);
       }
     });
 
     socket.on("textMessage", ({ sender, receiver, message, conversationId }) => {
-      console.log("Message received from", sender, "to", receiver);
+      logger.info("Message received from", sender, "to", receiver);
       const recipient = getUser(receiver);
       if (recipient) {
         io.to(recipient.socketId).emit("textMessageFromBack", {
@@ -189,12 +190,12 @@ export default (socketIo) => {
 
     socket.on("disconnect", () => {
       clearInterval(heartbeatInterval);
-      console.log(socket.id, "disconnected");
+      logger.info(socket.id, "disconnected");
       removeUser(socket.id);
     });
 
     socket.on("error", (err) => {
-      console.error("Socket error:", err);
+      logger.error("Socket error:", err);
       socket.disconnect();
     });
   });

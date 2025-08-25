@@ -126,8 +126,7 @@ export const getAllJobProviders = catchAsync(async (req, res) => {
 });
 
 //get all payments
-export const getAllPayments = catchAsync(async (req, res, next) => {
-  try {
+export const getAllPayments = catchAsync(async (req, res) => {
     const { pending_status, assending } = req.query;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 5;
@@ -165,16 +164,18 @@ export const getAllPayments = catchAsync(async (req, res, next) => {
 
     const totalPayments = await Payment.countDocuments(query);
     const totalPages = Math.ceil(totalPayments / limit);
+    logger.info('Admin retrieved payments', {
+      adminId: req.user._id,
+      page,
+      totalPayments,
+      pending_status,
+      requestId: req.requestId
+    });
     res.json({ payments, currentPage: page, totalPages, totalPayments });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get all payments" });
-  }
 });
 
 //get all jobs
-export const getAllJobs = catchAsync(async (req, res, next) => {
-  try {
+export const getAllJobs = catchAsync(async (req, res) => {
     const { status, assending } = req.query;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 5;
@@ -199,16 +200,18 @@ export const getAllJobs = catchAsync(async (req, res, next) => {
       .skip(startIndex);
     const totalJobs = await Job.countDocuments(query);
     const totalPages = Math.ceil(totalJobs / limit);
+    logger.info('Admin retrieved jobs', {
+      adminId: req.user._id,
+      page,
+      totalJobs,
+      status,
+      requestId: req.requestId
+    });
     res.json({ jobs, currentPage: page, totalPages, totalJobs });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get all jobs" });
-  }
 });
 
 //get all gigs
-export const getAllGigs = catchAsync(async (req, res, next) => {
-  try {
+export const getAllGigs = catchAsync(async (req, res) => {
     const { assending } = req.query;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 5;
@@ -228,16 +231,17 @@ export const getAllGigs = catchAsync(async (req, res, next) => {
       .skip(startIndex);
     const totalGigs = await Gig.countDocuments(query);
     const totalPages = Math.ceil(totalGigs / limit);
+    logger.info('Admin retrieved gigs', {
+      adminId: req.user._id,
+      page,
+      totalGigs,
+      requestId: req.requestId
+    });
     res.json({ gigs, currentPage: page, totalPages, totalGigs });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get all gigs" });
-  }
 });
 
 //completed payment
-export const completedPayment = catchAsync(async (req, res, next) => {
-  try {
+export const completedPayment = catchAsync(async (req, res) => {
     const { paymentId } = req.params;
     const { freelancerId, jobProviderId, amount } = req.body;
     const freelancer = await User.findById(freelancerId);
@@ -269,16 +273,20 @@ export const completedPayment = catchAsync(async (req, res, next) => {
     jobProvider.can_review.push({ user: freelancerId });
     await jobProvider.save();
 
+    logger.info('Payment completed successfully', {
+      adminId: req.user._id,
+      paymentId,
+      freelancerId,
+      jobProviderId,
+      amount,
+      requestId: req.requestId
+    });
+
     res.status(200).json({ message: "Payment completed successfully" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to complete payment" });
-  }
 });
 
 //verfiy document
-export const verifyDocument = catchAsync(async (req, res, next) => {
-  try {
+export const verifyDocument = catchAsync(async (req, res) => {
     const { userId } = req.params;
     const user = await User.findById(userId);
     if (!user) {
@@ -290,16 +298,18 @@ export const verifyDocument = catchAsync(async (req, res, next) => {
     user.isDocumentVerified = "verified";
     await user.save();
 
+    logger.info('User verified successfully', {
+      adminId: req.user._id,
+      userId,
+      email: user.email,
+      requestId: req.requestId
+    });
+
     res.status(200).json({ message: "User Successfully verified" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failded to verfified the user" });
-  }
 });
 
 //reject document
-export const rejectDocument = catchAsync(async (req, res, next) => {
-  try {
+export const rejectDocument = catchAsync(async (req, res) => {
     const { userId } = req.params;
     const user = await User.findById(userId);
     if (!user) {
@@ -310,16 +320,18 @@ export const rejectDocument = catchAsync(async (req, res, next) => {
     user.documents = [];
     await user.save();
 
+    logger.info('User document rejected successfully', {
+      adminId: req.user._id,
+      userId,
+      email: user.email,
+      requestId: req.requestId
+    });
+
     res.status(200).json({ message: "User document rejected" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failded to reject the user document" });
-  }
 });
 
 //get all reports
-export const getAllReports = catchAsync(async (req, res, next) => {
-  try {
+export const getAllReports = catchAsync(async (req, res) => {
     const { assending } = req.query;
     let sort = {};
     if (assending === "true") {
@@ -333,16 +345,17 @@ export const getAllReports = catchAsync(async (req, res, next) => {
       .populate("reportedTo")
       .sort(sort);
 
+    logger.info('Admin retrieved reports', {
+      adminId: req.user._id,
+      reports: reports.length,
+      requestId: req.requestId
+    });
+
     res.status(200).json({ reports });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get all reports" });
-  }
 });
 
 //deactivate user
-export const deactivateUser = catchAsync(async (req, res, next) => {
-  try {
+export const deactivateUser = catchAsync(async (req, res) => {
     const { userId } = req.params;
     const user = await User.findById(userId);
     if (!user) {
@@ -367,16 +380,18 @@ export const deactivateUser = catchAsync(async (req, res, next) => {
 
     await user.save();
 
+    logger.info('User deactivated successfully', {
+      adminId: req.user._id,
+      userId,
+      email: user.email,
+      requestId: req.requestId
+    });
+
     res.status(200).json({ message: "User Successfully deactivated" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failded to deactivate the user" });
-  }
 });
 
 //activate user
-export const activateUser = catchAsync(async (req, res, next) => {
-  try {
+export const activateUser = catchAsync(async (req, res) => {
     const { userId } = req.params;
     const user = await User.findById(userId);
     if (!user) {
@@ -396,28 +411,31 @@ export const activateUser = catchAsync(async (req, res, next) => {
 
     await user.save();
 
+    logger.info('User activated successfully', {
+      adminId: req.user._id,
+      userId,
+      email: user.email,
+      requestId: req.requestId
+    });
+
     res.status(200).json({ message: "User Successfully activated" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failded to activate the user" });
-  }
 });
 
 //get all the deactivate accounts
-export const getAllDeactivatedAccounts = catchAsync(async (req, res, next) => {
-  try {
-    const users = await User.find({ userAccountStatus: "Deactivated" });
+export const getAllDeactivatedAccounts = catchAsync(async (req, res) => {
+  const users = await User.find({ userAccountStatus: "Deactivated" });
 
-    res.status(200).json({ users });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get all deactivated accounts" });
-  }
+  logger.info('Admin retrieved deactivated accounts', {
+    adminId: req.user._id,
+    users: users.length,
+    requestId: req.requestId
+  });
+
+  res.status(200).json({ users });
 });
 
 //user growth
-export const getUserGrowth = catchAsync(async (req, res, next) => {
-  try {
+export const getUserGrowth = catchAsync(async (req, res) => {
     const userGrowthData = await User.aggregate([
       {
         $match: {
@@ -449,15 +467,17 @@ export const getUserGrowth = catchAsync(async (req, res, next) => {
       amt: 0,
     }));
 
+    logger.info('Admin retrieved user growth', {
+      adminId: req.user._id,
+      userGrowthData: response,
+      requestId: req.requestId
+    });
+
     res.status(200).json({ userGrowthData: response });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get user growth" });
-  }
 });
 
 //send push notification to all users
-export const sendPushNotification = catchAsync(async (req, res, next) => {
+export const sendPushNotification = catchAsync(async (req, res) => {
   try {
     const { message } = req.body;
     const users = await User.find();
@@ -471,9 +491,9 @@ export const sendPushNotification = catchAsync(async (req, res, next) => {
             body: message,
           },
         });
-        console.log("Notification sent successfully to user:", user._id);
+        logger.info("Notification sent successfully to user:", user._id);
       } catch (err) {
-        console.error(err);
+        logger.error(err);
         if (err.code === "messaging/registration-token-not-registered") {
           // Remove the unregistered token from the user
           user.fcm_token = null;
@@ -489,13 +509,13 @@ export const sendPushNotification = catchAsync(async (req, res, next) => {
     });
     res.status(200).json({ message: "Push notification sent successfully" });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ message: "Failed to send push notification" });
   }
 });
 
 
-export const getNewUsers = catchAsync(async (req, res, next) => {
+export const getNewUsers = catchAsync(async (req, res) => {
   try {
     const roles = ["job_seeker", "job_provider", "admin"];
     const currentDate = new Date();
@@ -586,7 +606,6 @@ export const getNewUsers = catchAsync(async (req, res, next) => {
     return res.status(200).json({ users: finalResults });
 
   } catch (err) {
-    console.log(err);
     res.status(500).json({ message: "Failed to get new users" });
   }
 });

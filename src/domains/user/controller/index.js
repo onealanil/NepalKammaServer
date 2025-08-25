@@ -52,7 +52,8 @@ export const createUser = catchAsync(async (req, res) => {
     security_answer,
     location,
     latitude,
-    longitude
+    longitude,
+    captchaToken
   } = req.body;
 
   logger.info('User registration attempt', {
@@ -61,6 +62,11 @@ export const createUser = catchAsync(async (req, res) => {
     role,
     requestId: req.requestId
   });
+
+  if (!captchaToken) {
+    logger.warn('Captcha failed', { requestId: req.requestId });
+    return res.status(StatusCodes.UNAUTHORIZED).json({ message: "Please verify you are not a robot" });
+  }
 
   const findEmail = await User.findOne({ email });
   const findUsername = await User.findOne({ username });

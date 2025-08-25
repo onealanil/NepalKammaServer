@@ -6,6 +6,7 @@
 import Job from "../../models/Job.js";
 import cron from "node-cron";
 import User from "../../models/User.js";
+import logger from "./logger.js";
 
 /**
  * s@function updateJobVisibility
@@ -23,7 +24,9 @@ export async function updateJobVisibility() {
         }).select("_id");
 
         if (!expiredJobs.length) {
-          console.log("No expired jobs found.");
+          logger.info('No expired jobs found', {
+            requestId: 'cron_job'
+          });
           return;
         }
 
@@ -38,16 +41,18 @@ export async function updateJobVisibility() {
           { savedPosts: { $in: expiredJobIds } },
           { $pull: { savedPosts: { $in: expiredJobIds } } }
         );
-
-        console.log(
-          `Updated ${jobUpdateResult.modifiedCount} jobs and removed from ${userUpdateResult.modifiedCount} users' savedPosts.`
-        );
+        logger.info('Expired jobs updated successfully', {
+          jobCount: jobUpdateResult.modifiedCount,
+          userCount: userUpdateResult.modifiedCount,
+          requestId: 'cron_job'
+        });
 
       } catch (error) {
-        console.error("Error in expired job cleanup cron:", error);
+        logger.error('Error in expired job cleanup cron', { error: error.message, requestId: 'cron_job' });
+
       }
-  });
-} catch (error) {
-  console.error("Error updating job visibility:", error);
-}
+    });
+  } catch (error) {
+    logger.error('Error updating job visibility', { error: error.message, requestId: 'cron_job' });
+  }
 }

@@ -48,7 +48,7 @@ const catchAsync = (fn, options = {}) => {
 
         // Performance warning for slow requests
         if (duration > 5000) {
-          console.warn(`Slow request detected: ${req.method} ${req.path} took ${duration}ms`);
+          logger.warn(`Slow request detected: ${req.method} ${req.path} took ${duration}ms`);
         }
       }
       return result;

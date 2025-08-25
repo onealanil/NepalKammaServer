@@ -45,6 +45,7 @@ import {
   otpLimiter
 } from "../services/authRoutes.js";
 import { normalLimiter } from "../services/normalRoutes.js";
+import { captchaVerification } from "../utils/captchaVerification.js";
 const router = express.Router();
 
 /**
@@ -54,7 +55,7 @@ const router = express.Router();
  */
 router
   .route("/signup")
-  .post(signupLimiter, signUpValidation, signupValidationResult, createUser);
+  .post(signupLimiter, signUpValidation, signupValidationResult, captchaVerification, createUser);
 
 /**
  * @description User verification route
