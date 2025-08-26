@@ -36,6 +36,8 @@ import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { updateJobVisibility } from "./src/utils/BackgroundTask.js";
 import { notFoundHandler } from "./src/utils/notFound.js";
+import mongoSanitize from "express-mongo-sanitize";
+import hpp from "hpp";
 
 // Routes
 import user from "./src/routes/User.js";
@@ -55,20 +57,30 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Create Express app
 const app = express();
 
+/**
+ * Hide express fingerprint
+ */
+app.disable("x-powered-by");
+
+/**
+ * HTTP parameter pollution
+ */
+app.use(hpp());
+
 //helmet configuration
 app.use(helmet());
 
 // CORS configuration
 const corsOptions = {
   origin: [
-    "http://localhost:3000",  
-    "http://localhost:3001",    
-    "http://localhost:8080",    
-    "http://localhost:8081",    
-    "http://127.0.0.1:3000",   
-    "http://127.0.0.1:8080",  
-    "http://127.0.0.1:5500", 
-    "http://127.0.0.1:5501",  
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:8080",
+    "http://localhost:8081",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:5500",
+    "http://127.0.0.1:5501",
     "http://192.168.1.58:3000",
     "http://192.168.1.57:3000",
     "https://nepalkammaserver.fly.dev"
@@ -77,9 +89,9 @@ const corsOptions = {
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: [
     "Origin",
-    "X-Requested-With", 
-    "Content-Type", 
-    "Accept", 
+    "X-Requested-With",
+    "Content-Type",
+    "Accept",
     "Authorization",
     "Cache-Control"
   ],
@@ -94,7 +106,7 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,PATCH,OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control');
-  
+
   if (req.method === 'OPTIONS') {
     res.sendStatus(200);
   } else {
@@ -108,6 +120,16 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(cookieParser());
+
+/**
+ * mongo sanitization
+ */
+app.use(
+  mongoSanitize({
+    replaceWith: "_",
+  })
+);
+
 
 // Serve static files
 app.use(express.static(path.join(__dirname, "public")));

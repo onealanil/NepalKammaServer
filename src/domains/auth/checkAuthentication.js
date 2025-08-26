@@ -58,7 +58,6 @@ export const checkAuthentication = catchAsync(async (req, res) => {
  */
 export const refreshToken = catchAsync(async (req, res) => {
   const token = req.cookies.refreshToken;
-  console.log("this is token", token);
   if (!token) {
     logger.warn('Refresh token attempt failed - no token found', {
       requestId: req.requestId

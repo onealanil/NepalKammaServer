@@ -103,7 +103,7 @@ async function startServer() {
 
     // Start the server1
     const server = httpServer.listen(PORT, HOST, () => {
-      console.log(`Server started on ${HOST}:${PORT}`);
+      logger.info(`Server started on ${HOST}:${PORT}`);
     });
 
     process.on("unhandledRejection", (err) => {

@@ -7,7 +7,6 @@ import Job from "../../../../models/Job.js";
 
 export const protect = catchAsync(async (req, res, next) => {
   const authHeader = req.headers.authorization;
-  console.log("this is auth header: ", authHeader)
   if (!(authHeader && authHeader.toLowerCase().startsWith("bearer")))
     throw createError(
       401,
