@@ -97,8 +97,8 @@ async function startServer() {
     app.set("io", io);
 
     const PORT = process.env.PORT || 8000;
-    const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
-    // const HOST = "0.0.0.0";
+    // const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
+    const HOST = "0.0.0.0";
 
 
     // Start the server1

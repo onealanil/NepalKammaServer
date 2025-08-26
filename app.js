@@ -38,6 +38,7 @@ import { updateJobVisibility } from "./src/utils/BackgroundTask.js";
 import { notFoundHandler } from "./src/utils/notFound.js";
 import mongoSanitize from "express-mongo-sanitize";
 import hpp from "hpp";
+import client from "prom-client";
 
 // Routes
 import user from "./src/routes/User.js";
@@ -51,6 +52,7 @@ import Review from "./src/routes/Review.js";
 import Notification from "./src/routes/Notification.js";
 import Report from "./src/routes/Report.js";
 import { errorHandler } from "./src/utils/errorHandler.js";
+import responseTime from "response-time";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -145,6 +147,27 @@ cloudinary.v2.config({
 updateJobVisibility();
 
 /**
+ * setting up the promp client
+ */
+const collectDefaultMetrics = client.collectDefaultMetrics;
+collectDefaultMetrics({ register: client.register });
+
+const reqResTime = new client.Histogram({
+  name: 'http_express_req_res_time',
+  help: "this istells how much time is taken by req and res",
+  labelNames: ["method", "route", 'status_code'],
+  buckets: [1, 50, 100, 200, 400, 500, 800, 1000, 2000],
+});
+
+app.use(responseTime((req, res, time) => {
+  reqResTime.labels({
+    method: req.method,
+    route: req.url,
+    status_code: res.statusCode,
+  }).observe(time)
+}))
+
+/**
  * All routing included
  * (user, auth, job, Gig, Message, Admin, Payment, Review, Notification, Report)
  */
@@ -178,6 +201,14 @@ app.use("/api/v1/notification", Notification);
 
 // routes for report
 app.use("/api/v1/report", Report);
+
+//metrics
+app.get("/metrics", async (req, res) => {
+  res.setHeader("Content-Type", client.register.contentType);
+  const metrics = await client.register.metrics();
+  res.send(metrics);
+
+})
 
 //handle not found routes
 app.use(notFoundHandler);

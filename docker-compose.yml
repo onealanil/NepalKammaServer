@@ -6,7 +6,6 @@ services:
     image: mongo:7.0
     container_name: nepalkamma-mongodb
     restart: unless-stopped
-    environment:
     ports:
       - "27020:27017"
     volumes:
@@ -19,6 +18,17 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Prometheus Monitoring
+  prom-server:
+    image: prom/prometheus
+    container_name: nepalkamma-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus-config.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - nepalkamma-network
 
   # Node.js Application
   app:
