@@ -50,6 +50,15 @@ async function connectMongo() {
       process.exit(0);
     });
 
+    /**
+     * for container deployemnts
+     */
+    process.on("SIGTERM", async ()=>{
+      await mongoose.connection.close();
+      logger.info("MongoDB connection closed due to app termination (SIGTERM)");
+      process.exit(0);
+    })
+
     // Actual connection
     const connection = await mongoose.connect(MONGO_URI, connectionOptions);
     cachedConnection = connection;

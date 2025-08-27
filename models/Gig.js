@@ -46,6 +46,13 @@ const GigInfoSchema = new mongoose.Schema(
   }
 );
 
+/**
+ * indexes for gigs
+ */
+GigInfoSchema.index({title: "text", gig_description: "text"});
+
+GigInfoSchema.index({postedBy: 1, createdAt: -1}, {background: true});
+
 const Gig = mongoose.model("Gig", GigInfoSchema);
 
 export default Gig;

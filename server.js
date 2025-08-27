@@ -19,6 +19,9 @@ import configureSocket from "./socketHandler.js";
 import app from "./app.js";
 import connectMongo from "./config/connection.js";
 import logger from "./src/utils/logger.js";
+import Job from "./models/Job.js";
+import Gig from "./models/Gig.js";
+import User from "./models/User.js";
 
 /**
  * Clustering server.js
@@ -76,6 +79,26 @@ import logger from "./src/utils/logger.js";
 async function startServer() {
   try {
     await connectMongo();
+
+    /**
+     * sync indexes
+     */
+    const indexResults = await Promise.allSettled([
+      Job.syncIndexes(),
+      Gig.syncIndexes(),
+      User.syncIndexes()
+    ]);
+
+    indexResults.forEach((result, i) => {
+      const modelName = ["Job", "Gig", "User"][i];
+      const timestamp = new Date().toISOString();
+
+      if (result.status === "fulfilled") {
+        logger.info(`[${timestamp}] ${modelName} indexes synced successfully`);
+      } else {
+        logger.error(`[${timestamp}] Error syncing indexes for ${modelName}: ${result.reason}`);
+      }
+    });
 
     const httpServer = createServer(app);
 

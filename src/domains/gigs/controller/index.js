@@ -395,11 +395,11 @@ export const deleteSingleGig = catchAsync(async (req, res) => {
 
 });
 
-// /**
-//  * @function getSingleGig
-//  * @description Get a single gig by its ID.
-//  * @param {Object} req - The request object containing the gig ID in params.
-//  */
+/**
+ * @function getSingleGig
+ * @description Get a single gig by its ID.
+ * @param {Object} req - The request object containing the gig ID in params.
+ */
 
 export const getSingleGig = catchAsync(async (req, res) => {
     const { gigId } = req.params;

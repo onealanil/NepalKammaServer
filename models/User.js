@@ -6,16 +6,10 @@ const UserInfoSchema = new mongoose.Schema(
     username: {
       type: String,
       required: true,
-      index: {
-        unique: true,
-      },
     },
     email: {
       type: String,
       required: true,
-      index: {
-        unique: true,
-      },
     },
     password: {
       type: String,
@@ -157,6 +151,9 @@ const UserInfoSchema = new mongoose.Schema(
 );
 
 UserInfoSchema.index({ "address.coordinates": "2dsphere" });
+
+UserInfoSchema.index({ username: 1 }, { background: true });
+UserInfoSchema.index({ email: 1 }, { background: true });
 
 const User = mongoose.model("User", UserInfoSchema);
 

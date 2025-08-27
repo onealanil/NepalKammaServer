@@ -163,7 +163,7 @@ app.use(responseTime((req, res, time) => {
   reqResTime.labels({
     method: req.method,
     route: req.url,
-    status_code: res.statusCode,
+      status_code: res.statusCode,
   }).observe(time)
 }))
 

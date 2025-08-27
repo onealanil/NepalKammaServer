@@ -63,7 +63,7 @@ const JobInfoSchema = new mongoose.Schema(
       enum: ["Pending", "In_Progress", "Completed", "Cancelled", "Paid"],
       default: "Pending",
     },
-    priority:{
+    priority: {
       type: String,
       enum: ["Low", "Medium", "Urgent"],
       default: "Low",
@@ -87,10 +87,18 @@ const JobInfoSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+/**
+ * indexes
+ */
 
 JobInfoSchema.index({ title: "text", job_description: "text" });
 // Create the geospatial index
 JobInfoSchema.index({ "address.coordinates": "2dsphere" });
+
+//using indexes for getSingleUserJobs
+JobInfoSchema.index({ postedBy: 1, createdAt: -1 }, {background: true});
+
+JobInfoSchema.index({assignedTo: 1}, {background: true});
 
 const Job = mongoose.model("Job", JobInfoSchema);
 
