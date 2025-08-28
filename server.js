@@ -106,7 +106,7 @@ async function startServer() {
     const io = new Server(httpServer, {
       cors: {
         origin: "*", // Allow all origins for testing
-        methods: ["GET", "POST"],
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
         credentials: true,
       },
       allowEIO3: true, // Allow Engine.IO v3 clients
@@ -120,8 +120,8 @@ async function startServer() {
     app.set("io", io);
 
     const PORT = process.env.PORT || 8000;
-    // const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
-    const HOST = "0.0.0.0";
+    const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
+    // const HOST = "0.0.0.0";
 
 
     // Start the server1

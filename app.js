@@ -85,7 +85,9 @@ const corsOptions = {
     "http://127.0.0.1:5501",
     "http://192.168.1.58:3000",
     "http://192.168.1.57:3000",
-    "https://nepalkammaserver.fly.dev"
+    "https://nepalkammaserver.fly.dev",
+    "https://nepal-kamma-web.vercel.app",
+    "https://nepal-kamma-5n7c2se66-khalifaanil84gmailcoms-projects.vercel.app"
   ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
