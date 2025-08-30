@@ -85,8 +85,11 @@ const corsOptions = {
     "http://127.0.0.1:5501",
     "http://192.168.1.58:3000",
     "http://192.168.1.57:3000",
+    "http://192.168.20.249:3000",
     "https://nepalkammaserver.fly.dev",
     "https://nepal-kamma-web.vercel.app",
+    "https://nepalkamma.local",
+    "https://api.nepalkamma.local",
     "https://nepal-kamma-5n7c2se66-khalifaanil84gmailcoms-projects.vercel.app"
   ],
   credentials: true,
@@ -105,18 +108,18 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Add headers manually as backup
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,PATCH,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control');
+// app.use((req, res, next) => {
+//   res.header('Access-Control-Allow-Origin', req.headers.origin);
+//   res.header('Access-Control-Allow-Credentials', 'true');
+//   res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,PATCH,OPTIONS');
+//   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control');
 
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
-  } else {
-    next();
-  }
-});
+//   if (req.method === 'OPTIONS') {
+//     res.sendStatus(200);
+//   } else {
+//     next();
+//   }
+// });
 
 /**
  * Using the necessary packages
@@ -165,7 +168,7 @@ app.use(responseTime((req, res, time) => {
   reqResTime.labels({
     method: req.method,
     route: req.url,
-      status_code: res.statusCode,
+    status_code: res.statusCode,
   }).observe(time)
 }))
 

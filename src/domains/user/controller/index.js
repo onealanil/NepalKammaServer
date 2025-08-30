@@ -264,14 +264,26 @@ export const LoginUser = catchAsync(async (req, res) => {
         address: findEmail.address
       };
 
-      res.cookie("refreshToken", refreshToken, {
+      // Cookie configuration based on environment
+      const isProduction = process.env.NODE_ENV === "production";
+      const cookieOptions = {
         httpOnly: true,
-        // secure: process.env.NODE_ENV === "production",
-        secure: true,
-        sameSite: "none",
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: "/",
-      });
+        domain: ".nepalkamma.local"
+      };
+
+      if (isProduction) {
+        // Production settings (HTTPS)
+        cookieOptions.secure = true;
+        cookieOptions.sameSite = "none";
+      } else {
+        // Development settings (HTTP)
+        cookieOptions.secure = false;
+        cookieOptions.sameSite = "lax";
+      }
+
+      res.cookie("refreshToken", refreshToken, cookieOptions);
 
       logger.info('Login successful', {
         userId: findEmail._id,

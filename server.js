@@ -106,6 +106,11 @@ async function startServer() {
     const io = new Server(httpServer, {
       cors: {
         origin: "*", // Allow all origins for testing
+        // origin: [
+        //   "https://nepalkamma.local",
+        //   "https://nepal-kamma-web.vercel.app",
+        //   "https://nepal-kamma-5n7c2se66-khalifaanil84gmailcoms-projects.vercel.app"
+        // ],
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
         credentials: true,
       },
@@ -120,8 +125,8 @@ async function startServer() {
     app.set("io", io);
 
     const PORT = process.env.PORT || 8000;
-    const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
-    // const HOST = "0.0.0.0";
+    // const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
+    const HOST = "0.0.0.0";
 
 
     // Start the server1
