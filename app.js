@@ -39,6 +39,7 @@ import { notFoundHandler } from "./src/utils/notFound.js";
 import mongoSanitize from "express-mongo-sanitize";
 import hpp from "hpp";
 import client from "prom-client";
+import dotenv from "dotenv";
 
 // Routes
 import user from "./src/routes/User.js";
@@ -53,6 +54,8 @@ import Notification from "./src/routes/Notification.js";
 import Report from "./src/routes/Report.js";
 import { errorHandler } from "./src/utils/errorHandler.js";
 import responseTime from "response-time";
+
+dotenv.config();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -140,6 +143,7 @@ app.use(
 
 // Serve static files
 app.use(express.static(path.join(__dirname, "public")));
+
 
 // Cloudinary Config
 cloudinary.v2.config({

@@ -270,7 +270,7 @@ export const LoginUser = catchAsync(async (req, res) => {
         httpOnly: true,
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: "/",
-        domain: ".nepalkamma.local"
+        // domain: ".nepalkamma.local"
       };
 
       if (isProduction) {
