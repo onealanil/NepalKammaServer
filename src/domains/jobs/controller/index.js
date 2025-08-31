@@ -18,9 +18,14 @@ import NotificationModel from "../../../../models/Notification.js";
 import User from "../../../../models/User.js";
 import { emitNotification } from "../../../../socketHandler.js";
 import firebase from "../../../firebase/index.js";
-import { getOrSetCache, clearCache } from "../../../utils/cacheService.js";
+import { getOrSetCache, clearCache, clearNearbyCache, clearSearchCaches, clearRecommendationCaches } from "../../../utils/cacheService.js";
 import { StatusCodes } from "http-status-codes";
 import logger from "../../../utils/logger.js";
+
+function normalizeCoord(coord) {
+  return Math.round(coord * 1000) / 1000;
+}
+
 
 /**
  * @function createJob
@@ -73,168 +78,175 @@ export const createJob = catchAsync(async (req, res) => {
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: "Invalid experiesInHrs" });
   }
 
-    const jobData = new Job({
-      title,
-      location,
-      address: {
-        coordinates: [longitude, latitude],
-      },
-      phoneNumber,
-      skills_required,
-      job_description,
-      payment_method,
-      price,
-      category,
-      postedBy: req.user._id,
-      experiesIn: experiesIndate,
-      priority: priority,
-    });
+  const jobData = new Job({
+    title,
+    location,
+    address: {
+      coordinates: [longitude, latitude],
+    },
+    phoneNumber,
+    skills_required,
+    job_description,
+    payment_method,
+    price,
+    category,
+    postedBy: req.user._id,
+    experiesIn: experiesIndate,
+    priority: priority,
+  });
 
-    await jobData.save();
+  await jobData.save();
 
-    // Create notifications for job seekers with matching skills
-    const jobSeekers = await User.find({
-      role: "job_seeker",
-      skills: { $in: skills_required },
-    });
+  // Create notifications for job seekers with matching skills
+  const jobSeekers = await User.find({
+    role: "job_seeker",
+    skills: { $in: skills_required },
+  });
 
-    const notifications = await Promise.all(
-      jobSeekers.map(async (jobSeeker) => {
-        const sender = await User.findById(req.user._id);
-        return {
-          senderId: req.user._id,
-          senderUsername: sender.username,
-          senderProfilePic: sender.profilePic?.url,
-          recipientId: jobSeeker._id,
-          jobId: jobData._id,
-          notification: `${title} - ${job_description}`,
-          type: "job_posted",
-          onlineStatus: sender.onlineStatus,
-          fcm_token: jobSeeker.fcm_token,
-        };
-      })
-    );
-    await NotificationModel.insertMany(notifications); experiesIndate
-    notifications.forEach((notification) => {
-      if (notification.onlineStatus) {
-        emitNotification(req.app.get("io"), notification.recipientId.toString(), {
-          senderId: notification.senderId,
-          recipientId: notification.recipientId,
-          notification: notification.notification,
-          profilePic: notification.senderProfilePic,
-          senderUsername: notification.senderUsername,
-          type: "job_posted",
-        });
-      }
-    });
+  const notifications = await Promise.all(
+    jobSeekers.map(async (jobSeeker) => {
+      const sender = await User.findById(req.user._id);
+      return {
+        senderId: req.user._id,
+        senderUsername: sender.username,
+        senderProfilePic: sender.profilePic?.url,
+        recipientId: jobSeeker._id,
+        jobId: jobData._id,
+        notification: `${title} - ${job_description}`,
+        type: "job_posted",
+        onlineStatus: sender.onlineStatus,
+        fcm_token: jobSeeker.fcm_token,
+      };
+    })
+  );
+  await NotificationModel.insertMany(notifications); experiesIndate
+  notifications.forEach((notification) => {
+    if (notification.onlineStatus) {
+      emitNotification(req.app.get("io"), notification.recipientId.toString(), {
+        senderId: notification.senderId,
+        recipientId: notification.recipientId,
+        notification: notification.notification,
+        profilePic: notification.senderProfilePic,
+        senderUsername: notification.senderUsername,
+        type: "job_posted",
+      });
+    }
+  });
 
-    const sendNotificationRecommendation = async (notification) => {
-      try {
-        await firebase.messaging().send({
-          token: notification?.fcm_token,
-          notification: {
-            title:
-              notification.senderUsername + ": Job Recommendation for you🎆😍",
-            body: title,
-          },
-        });
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
-    // Send push notifications to job seekers with matching skills
-    notifications.forEach(async (notification) => {
-      if (notification.fcm_token) {
-        sendNotificationRecommendation(notification);
-      }
-    });
-
-    // Create notifications for nearby job seekers
-    const nearbyJobSeekers = await User.aggregate([
-      {
-        $geoNear: {
-          near: {
-            type: "Point",
-            coordinates: [parseFloat(longitude), parseFloat(latitude)],
-          },
-          key: "address.coordinates",
-          maxDistance: 10000, // 10km
-          distanceField: "distance",
-          spherical: true,
+  const sendNotificationRecommendation = async (notification) => {
+    try {
+      await firebase.messaging().send({
+        token: notification?.fcm_token,
+        notification: {
+          title:
+            notification.senderUsername + ": Job Recommendation for you🎆😍",
+          body: title,
         },
-      },
-      {
-        $match: {
-          role: "job_seeker",
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Send push notifications to job seekers with matching skills
+  notifications.forEach(async (notification) => {
+    if (notification.fcm_token) {
+      sendNotificationRecommendation(notification);
+    }
+  });
+
+  // Create notifications for nearby job seekers
+  const nearbyJobSeekers = await User.aggregate([
+    {
+      $geoNear: {
+        near: {
+          type: "Point",
+          coordinates: [parseFloat(longitude), parseFloat(latitude)],
         },
+        key: "address.coordinates",
+        maxDistance: 10000, // 10km
+        distanceField: "distance",
+        spherical: true,
       },
-    ]);
+    },
+    {
+      $match: {
+        role: "job_seeker",
+      },
+    },
+  ]);
 
-    const locationNotifications = await Promise.all(
-      nearbyJobSeekers.map(async (jobSeeker) => {
-        const sender = await User.findById(req.user._id);
-        return {
-          senderId: req.user._id,
-          senderUsername: sender.username,
-          senderProfilePic: sender.profilePic?.url,
-          recipientId: jobSeeker._id,
-          jobId: jobData._id,
-          notification: `${title} - ${job_description}`,
-          type: "job_posted_location",
-          onlineStatus: sender.onlineStatus,
-          fcm_token: jobSeeker.fcm_token,
-        };
-      })
-    );
-    await NotificationModel.insertMany(locationNotifications);
-    locationNotifications.forEach((notification) => {
-      if (notification.onlineStatus) {
-        emitNotification(req.app.get("io"), notification.recipientId.toString(), {
-          senderId: notification.senderId,
-          recipientId: notification.recipientId,
-          notification: notification.notification,
-          profilePic: notification.senderProfilePic,
-          senderUsername: notification.senderUsername,
-          type: "job_posted_location",
-        });
-      }
-    });
+  const locationNotifications = await Promise.all(
+    nearbyJobSeekers.map(async (jobSeeker) => {
+      const sender = await User.findById(req.user._id);
+      return {
+        senderId: req.user._id,
+        senderUsername: sender.username,
+        senderProfilePic: sender.profilePic?.url,
+        recipientId: jobSeeker._id,
+        jobId: jobData._id,
+        notification: `${title} - ${job_description}`,
+        type: "job_posted_location",
+        onlineStatus: sender.onlineStatus,
+        fcm_token: jobSeeker.fcm_token,
+      };
+    })
+  );
+  await NotificationModel.insertMany(locationNotifications);
+  locationNotifications.forEach((notification) => {
+    if (notification.onlineStatus) {
+      emitNotification(req.app.get("io"), notification.recipientId.toString(), {
+        senderId: notification.senderId,
+        recipientId: notification.recipientId,
+        notification: notification.notification,
+        profilePic: notification.senderProfilePic,
+        senderUsername: notification.senderUsername,
+        type: "job_posted_location",
+      });
+    }
+  });
 
-    const sendNotificationNearBy = async (notification) => {
-      try {
-        await firebase.messaging().send({
-          token: notification?.fcm_token,
-          notification: {
-            title: `Job found in ${location}🎆😍`,
-            body: title,
-          },
-        });
-      } catch (err) {
-        console.error(err);
-      }
-    };
+  const sendNotificationNearBy = async (notification) => {
+    try {
+      await firebase.messaging().send({
+        token: notification?.fcm_token,
+        notification: {
+          title: `Job found in ${location}🎆😍`,
+          body: title,
+        },
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-    // Send push notifications to job seekers with matching skills
-    locationNotifications.forEach(async (notification) => {
-      if (notification.fcm_token) {
-        sendNotificationNearBy(notification);
-      }
-    });
+  // Send push notifications to job seekers with matching skills
+  locationNotifications.forEach(async (notification) => {
+    if (notification.fcm_token) {
+      sendNotificationNearBy(notification);
+    }
+  });
 
-    clearCache([
-      "jobs_1_5", // First page of jobs
-      `nearby_${latitude}_${longitude}`,
-      `user_jobs${req.user._id}`
-    ]);
+  clearCache([
+    "jobs_1_5", // First page of jobs
+    `nearby_${normalizeCoord(latitude)}_${normalizeCoord(longitude)}`,
+    `user_jobs${req.user._id}`,
+    `recent_public_jobs`,
+    `recommendations_${req.user._id}`
+  ]);
 
-    logger.info('Job created successfully', {
-      jobId: jobData._id,
-      userId: req.user._id,
-      requestId: req.requestId
-    });
+  clearNearbyCache();
 
-    res.status(StatusCodes.CREATED).json({ message: "Successfully! created", job: jobData });
+  clearSearchCaches();
+  clearRecommendationCaches();
+
+  logger.info('Job created successfully', {
+    jobId: jobData._id,
+    userId: req.user._id,
+    requestId: req.requestId
+  });
+
+  res.status(StatusCodes.CREATED).json({ message: "Successfully! created", job: jobData });
 });
 
 /**
@@ -320,7 +332,9 @@ export const getSingleUserJobs = catchAsync(async (req, res) => {
  */
 export const nearBy = catchAsync(async (req, res) => {
   const { latitude, longitude } = req.params;
-  const cacheKey = `nearby_${latitude}_${longitude}`;
+
+
+  const cacheKey = `nearby_${normalizeCoord(latitude)}_${normalizeCoord(longitude)}`;
 
   const result = await getOrSetCache(cacheKey, async () => {
     const nearBy = await Job.aggregate([
@@ -352,7 +366,7 @@ export const nearBy = catchAsync(async (req, res) => {
       .exec();
 
     return { nearBy: populatedJobs };
-  });
+  }, 60);
 
   logger.info('Nearby jobs retrieved', {
     latitude,
@@ -578,9 +592,15 @@ export const updateJobStatus = catchAsync(async (req, res) => {
 
     clearCache([
       "jobs_1_5",
-      `nearby_${job.address.coordinates[1]}_${job.address.coordinates[0]}`,
-      `user_jobs${req.user._id}`
+      `nearby_${normalizeCoord(jobLat)}_${normalizeCoord(jobLng)}`,
+      `user_jobs${req.user._id}`,
+      `single_job_${jobId}`,
+      `recent_public_jobs`
     ]);
+
+    clearNearbyCache();
+    clearSearchCaches();
+    clearRecommendationCaches();
 
     logger.info('Job reset to pending', {
       jobId,
@@ -600,9 +620,17 @@ export const updateJobStatus = catchAsync(async (req, res) => {
 
   clearCache([
     "jobs_1_5",
-    `nearby_${job.address.coordinates[1]}_${job.address.coordinates[0]}`,
-    `user_jobs${req.user._id}`
+    `nearby_${normalizeCoord(jobLat)}_${normalizeCoord(jobLng)}`,
+    `user_jobs${req.user._id}`,
+    `single_job_${jobId}`,
+    `recent_public_jobs`
   ]);
+
+  if (job_status !== "Pending") {
+    clearNearbyCache();
+    clearSearchCaches();
+    clearRecommendationCaches();
+  }
 
   logger.info('Job status updated successfully', {
     jobId,
@@ -676,12 +704,19 @@ export const deleteJobs = catchAsync(async (req, res) => {
 
   await Job.findByIdAndDelete(jobId);
 
-  // Clear relevant caches when job is deleted
   clearCache([
-    "jobs_1_5", // First page of jobs
-    `nearby_${coordinates[1]}_${coordinates[0]}`,
-    `user_jobs${req.user._id}`
+    "jobs_1_5",
+    `nearby_${normalizeCoord(jobLat)}_${normalizeCoord(jobLng)}`,
+    `user_jobs${req.user._id}`,
+    `single_job_${jobId}`,
+    `recent_public_jobs`
   ]);
+
+  // Clear all related caches
+  clearNearbyCache();
+  clearSearchCaches();
+  clearRecommendationCaches();
+
 
   logger.info('Job deleted successfully', {
     jobId,

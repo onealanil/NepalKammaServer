@@ -1,20 +1,22 @@
 import nodemailer from "nodemailer";
 import logger from "../../../utils/logger.js";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 export const sendEmail = async ({ email }, res, req) => {
   try {
     const transporter = nodemailer.createTransport({
-      host: 'smtp.ethereal.email',
-      port: 587,
+      service: "gmail",
       auth: {
-          user: 'berneice.hamill@ethereal.email',
-          pass: 'dj5MDvtar1nZMzF1Hr'
-      }
-  });
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    });
 
     let mailOptions = {
-      from: "smtp.ethereal.email",
-      to: "lue.daniel59@ethereal.email",
+      from: process.env.EMAIL_USER,
+      to: email,
       subject: "Document Successfully verified!",
       text: "Document verified!",
       html: `<div style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0;">

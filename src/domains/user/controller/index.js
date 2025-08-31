@@ -581,30 +581,26 @@ export const updatePhoneNumber = catchAsync(async (req, res) => {
  *
  */
 export const uploadDocuments = catchAsync(async (req, res) => {
-  try {
-    const files = getDataUris(req.files);
+  const files = getDataUris(req.files);
 
-    const user = await User.findById(req.user._id);
+  const user = await User.findById(req.user._id);
 
-    const images = [];
-    for (let i = 0; i < files.length; i++) {
-      const fileData = files[i];
-      const cdb = await cloudinary.v2.uploader.upload(fileData, {});
-      images.push({
-        public_id: cdb.public_id,
-        url: cdb.secure_url,
-      });
-    }
-
-    user.documents = images;
-    user.isDocumentVerified = "Pending";
-    await user.save();
-
-    res.status(201).json({ message: "Successfully! uploaded" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to upload images" });
+  const images = [];
+  for (let i = 0; i < files.length; i++) {
+    const fileData = files[i];
+    const cdb = await cloudinary.v2.uploader.upload(fileData, {});
+    images.push({
+      public_id: cdb.public_id,
+      url: cdb.secure_url,
+    });
   }
+
+  user.documents = images;
+  user.isDocumentVerified = "Pending";
+  await user.save();
+
+  res.status(StatusCodes.CREATED).json({ message: "Successfully! uploaded"});
+
 });
 
 /**

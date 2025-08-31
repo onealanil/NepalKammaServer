@@ -19,7 +19,6 @@ export const getOrSetCache = async (key, fetchFunction, ttl) => {
     logger.info('Cache hit', { key, requestId: 'cache_service' });
     return cachedData;
   }
-
   logger.info('Cache miss', { key, requestId: 'cache_service' });
   const freshData = await fetchFunction();
   
@@ -36,10 +35,74 @@ export const getOrSetCache = async (key, fetchFunction, ttl) => {
  */
 export const clearCache = (keys) => {
   if (Array.isArray(keys)) {
-    keys.forEach((key) => cache.del(key));
+    keys.forEach((key) => {
+      cache.del(key);
+      logger.info('Cache cleared', { key, requestId: 'cache_service' });
+    });
   } else {
     cache.del(keys);
+    logger.info('Cache cleared', { key: keys, requestId: 'cache_service' });
   }
+};
+
+/**
+ * Clear all nearby job caches
+ */
+export const clearNearbyCache = () => {
+  const keys = cache.keys();
+  const nearbyKeys = keys.filter(key => key.startsWith('nearby_'));
+  nearbyKeys.forEach(key => {
+    cache.del(key);
+    logger.info('Nearby cache cleared', { key, requestId: 'cache_service' });
+  });
+  logger.info(`Cleared ${nearbyKeys.length} nearby cache entries`);
+};
+
+/**
+ * Clear all search-related caches
+ */
+export const clearSearchCaches = () => {
+  const keys = cache.keys();
+  const searchKeys = keys.filter(key => key.startsWith('search_'));
+  searchKeys.forEach(key => {
+    cache.del(key);
+    logger.info('Search cache cleared', { key, requestId: 'cache_service' });
+  });
+  logger.info(`Cleared ${searchKeys.length} search cache entries`);
+};
+
+/**
+ * Clear all recommendation caches
+ */
+export const clearRecommendationCaches = () => {
+  const keys = cache.keys();
+  const recommendationKeys = keys.filter(key => key.startsWith('recommendations_'));
+  recommendationKeys.forEach(key => {
+    cache.del(key);
+    logger.info('Recommendation cache cleared', { key, requestId: 'cache_service' });
+  });
+  logger.info(`Cleared ${recommendationKeys.length} recommendation cache entries`);
+};
+
+/**
+ * Clear all caches (nuclear option)
+ */
+export const clearAllCaches = () => {
+  cache.flushAll();
+  logger.info('All caches cleared', { requestId: 'cache_service' });
+};
+
+/**
+ * Get cache statistics
+ */
+export const getCacheStats = () => {
+  return {
+    keys: cache.keys().length,
+    hits: cache.getStats().hits,
+    misses: cache.getStats().misses,
+    ksize: cache.getStats().ksize,
+    vsize: cache.getStats().vsize
+  };
 };
 
 export default cache;
