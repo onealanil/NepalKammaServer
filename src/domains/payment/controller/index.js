@@ -8,6 +8,7 @@
  * @requirres multer
  */
 import Job from "../../../../models/Job.js";
+import User from "../../../../models/User.js";
 import Payment from "../../../../models/Payment.js";
 import { getDataUris } from "../../../utils/Features.js";
 import { clearCache } from "../../../utils/cacheService.js";
@@ -15,6 +16,7 @@ import catchAsync from "../../../utils/catchAsync.js";
 import cloudinary from "cloudinary";
 import { StatusCodes } from "http-status-codes";
 import logger from "../../../utils/logger.js";
+import { sendPaymentNotificationEmail } from "../helper/sendEmailPayment.js";
 
 /**
  * @function createPayment
@@ -60,6 +62,29 @@ export const createPayment = catchAsync(async (req, res) => {
       requestId: req.requestId
     });
     return res.status(StatusCodes.NOT_FOUND).json({ message: "Job not found" });
+  }
+
+  try {
+    const assignedUser = await User.findById(updatedJob.assignedTo);
+    const jobProvider = await User.findById(payment.PaymentBy);
+
+    if (assignedUser && assignedUser.email) {
+      await sendPaymentNotificationEmail({
+        email: assignedUser.email,
+        job_seeker_name: assignedUser.username,
+        job_name: updatedJob.title,
+        job_provider_name: jobProvider.username || "Job Provider",
+        amount: amount,
+        payment_method: payment.paymentType,
+        receiver_number: assignedUser.phoneNumber || "Not Provided"
+      }, res, req);
+    }
+  } catch (emailError) {
+    logger.error('Payment notification email failed', {
+      error: emailError.message,
+      paymentId: payment._id,
+      requestId: req.requestId
+    });
   }
 
   clearCache([

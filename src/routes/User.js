@@ -27,6 +27,7 @@ import {
   logoutUser,
   getTopRatedJobSeeker,
   getSingleUserSeeker,
+  nearByjobProviders,
 } from "../domains/user/controller/index.js";
 import {
   loginValidation,
@@ -165,6 +166,15 @@ router.route("/job-seeker").get(normalLimiter, protect, getAllJobSeekers);
 router
   .route(`/getNearbyJobSeeker/:latitude/:longitude`)
   .get(normalLimiter, protect, nearByJobSeekers);
+
+/**
+ * * @description Get nearby job providers route
+ * * @route GET /api/v1/user/getNearbyJobProvider/:latitude/:longitude
+ * * @access Private
+ * @param {latitude} latitude - Latitude of the user
+ * @param {longitude} longitude - Longitude of the user
+ */
+router.route(`/getNearbyJobProvider/:latitude/:longitude`).get(normalLimiter, protect, nearByjobProviders);
 
 /**
  * * @description Search user route

@@ -9,6 +9,7 @@ import { sendEmail } from "../helper/SendEmail.js";
 import firebase from "../../../firebase/index.js";
 import { StatusCodes } from "http-status-codes";
 import logger from "../../../utils/logger.js";
+import { sendPaymentTransparencyAppreciationEmail, sendPaymentVerificationSuccessEmail } from "../helper/SendEmailPaymentAdmin.js";
 
 //count all freelancers, job, gigs, and job_providers
 export const countAll = catchAsync(async (req, res) => {
@@ -262,6 +263,7 @@ export const completedPayment = catchAsync(async (req, res) => {
   }
 
   freelancer.totalIncome += amount;
+  freelancer.totalCompletedJobs += 1;
   freelancer.can_review.push({ user: jobProviderId });
   await freelancer.save();
 
@@ -280,6 +282,36 @@ export const completedPayment = catchAsync(async (req, res) => {
 
   job.job_status = "can_delete";
   await job.save();
+
+  try {
+  if (freelancer.email) {
+    await sendPaymentVerificationSuccessEmail({
+      email: freelancer.email,
+      job_seeker_name: freelancer.username || "Freelancer",
+      job_name: job.title,
+      job_provider_name: jobProvider.username || "Job Provider",
+      amount: amount,
+    }, res, req);
+  }
+
+  // Email to Job Provider
+  if (jobProvider.email) {
+    await sendPaymentTransparencyAppreciationEmail({
+      email: jobProvider.email,
+      job_provider_name: jobProvider.username || "Job Provider",
+      job_seeker_name: freelancer.username || "Freelancer",
+      job_name: job.title,
+      amount: amount,
+      milestone_achieved: jobProvider.mileStone 
+    }, res, req);
+  }
+} catch (emailError) {
+  logger.error('Failed to send payment completion emails', {
+    error: emailError.message,
+    paymentId,
+    requestId: req.requestId
+  });
+}
 
   logger.info('Payment completed successfully', {
     adminId: req.user._id,

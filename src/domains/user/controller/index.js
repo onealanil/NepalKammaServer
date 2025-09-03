@@ -599,7 +599,7 @@ export const uploadDocuments = catchAsync(async (req, res) => {
   user.isDocumentVerified = "Pending";
   await user.save();
 
-  res.status(StatusCodes.CREATED).json({ message: "Successfully! uploaded"});
+  res.status(StatusCodes.CREATED).json({ message: "Successfully! uploaded" });
 
 });
 
@@ -799,6 +799,80 @@ export const nearByJobSeekers = catchAsync(async (req, res) => {
   }
 });
 
+
+/**
+ * @function nearByjobProviders
+ * @param req - The request object containing user data for getting nearby job providers.
+ * * @param res - The response object to send the response back to the client.
+ * * @description - This function handles getting nearby job providers by validating the input data, checking for existing users, and returning the user data.
+ * * @returns - A JSON response containing the nearby job providers.
+ * * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
+ */
+export const nearByjobProviders = catchAsync(async (req, res) => {
+  const { latitude, longitude } = req.params;
+  const { page = 1, limit = 10 } = req.query;
+
+  if (!latitude || !longitude) {
+    return res.status(StatusCodes.BAD_REQUEST).json({
+      success: false,
+      message: "Latitude and longitude are required",
+    });
+  }
+
+  const lat = parseFloat(latitude);
+  const lng = parseFloat(longitude);
+  const pageNum = Math.max(1, parseInt(page, 10));
+  const limitNum = Math.max(1, parseInt(limit, 10));
+  const skip = (pageNum - 1) * limitNum;
+
+  const countPipeline = [
+    {
+      $geoNear: {
+        near: { type: "Point", coordinates: [lng, lat] },
+        distanceField: "dist.calculated",
+        maxDistance: parseFloat(10000),
+        spherical: true,
+      },
+    },
+    { $match: { role: "job_provider" } },
+    { $count: "total" },
+  ];
+
+  const countResult = await User.aggregate(countPipeline);
+  const totalJobProviders = countResult.length > 0 ? countResult[0].total : 0;
+  const totalPages = Math.ceil(totalJobProviders / limitNum);
+
+  // Main query with pagination
+  const providers = await User.aggregate([
+    {
+      $geoNear: {
+        near: { type: "Point", coordinates: [lng, lat] },
+        distanceField: "dist.calculated",
+        maxDistance: parseFloat(10000),
+        spherical: true,
+      },
+    },
+    { $match: { role: "job_provider" } },
+    { $project: { password: 0, documents: 0 } },
+    { $skip: skip },
+    { $limit: limitNum },
+  ]);
+
+  res.status(StatusCodes.OK).json({
+    success: true,
+    pagination: {
+      currentPage: pageNum,
+      totalPages,
+      totalJobProviders,
+      hasNextPage: pageNum < totalPages,
+      hasPrevPage: pageNum > 1,
+      limit: limitNum,
+    },
+    data: providers,
+  });
+});
+
+
 /**
  * @function searchUser
  * @param req - The request object containing user data for searching users.
@@ -808,19 +882,15 @@ export const nearByJobSeekers = catchAsync(async (req, res) => {
  * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
  */
 export const searchUser = catchAsync(async (req, res) => {
-  try {
-    const { username } = req.params;
+  const { username } = req.params;
 
-    const user = await User.find({
-      username: { $regex: new RegExp(`^${username}$`, "i") },
-      role: "job_seeker",
-    }).select("-password -documents -security_answer");
+  const user = await User.find({
+    username: { $regex: new RegExp(`^${username}$`, "i") },
+    role: "job_seeker",
+  }).select("-password -documents -security_answer");
 
-    res.status(200).json({ user });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to search user" });
-  }
+  res.status(StatusCodes.OK).json({ user });
+
 });
 
 /**
@@ -965,98 +1035,122 @@ export const getSavedJobs = catchAsync(async (req, res) => {
  * @throws - If an error occurs during the process, it sends a 422 status code with an error message.
  */
 export const getTopRatedJobProviders = catchAsync(async (req, res) => {
-  try {
-    const topRatedJobProviders = await User.aggregate([
-      {
-        $match: {
-          role: "job_provider",
-          isDocumentVerified: "verified",
+  const topRatedJobProviders = await User.aggregate([
+    {
+      $match: {
+        role: "job_provider",
+        isDocumentVerified: "verified",
+      },
+    },
+    {
+      $lookup: {
+        from: "reviews",
+        localField: "_id",
+        foreignField: "reviewedTo",
+        as: "reviews",
+      },
+    },
+    {
+      $addFields: {
+        averageRating: {
+          $avg: "$reviews.rating",
         },
       },
-      {
-        $lookup: {
-          from: "reviews",
-          localField: "_id",
-          foreignField: "reviewedTo",
-          as: "reviews",
-        },
+    },
+    {
+      $sort: {
+        averageRating: -1,
       },
-      {
-        $addFields: {
-          averageRating: {
-            $avg: "$reviews.rating",
-          },
-        },
+    },
+    {
+      $project: {
+        password: 0,
+        fcm_token: 0,
+        security_answer: 0,
       },
-      {
-        $sort: {
-          averageRating: -1,
-        },
-      },
-      {
-        $project: {
-          password: 0,
-          fcm_token: 0,
-          security_answer: 0,
-        },
-      },
-    ]);
+    },
+  ]);
 
-    res.status(200).json(topRatedJobProviders);
-  } catch (err) {
-    res.status(422).json({ message: err.message });
-  }
+  res.status(StatusCodes.OK).json(topRatedJobProviders);
 });
-
 
 /**
  * @function getTopRatedJobSeeker
  * @param req - The request object containing user data for getting top-rated job seekers.
  * @param res - The response object to send the response back to the client.
- * @description - This function handles getting top-rated job seekers by validating the input data, checking for existing users, and returning the top-rated job seekers.
- * @returns - A JSON response containing the top-rated job providers.
+ * @description - This function handles getting top-rated job seekers with pagination (10 per page)
+ * @returns - A JSON response containing the top-rated job seekers with pagination info.
  * @throws - If an error occurs during the process, it sends a 422 status code with an error message.
  */
 export const getTopRatedJobSeeker = catchAsync(async (req, res) => {
-  try {
-    const topRatedJobSeekers = await User.aggregate([
-      {
-        $match: {
-          role: "job_seeker",
-          isDocumentVerified: "verified",
-        },
-      },
-      {
-        $lookup: {
-          from: "reviews",
-          localField: "_id",
-          foreignField: "reviewedTo",
-          as: "reviews",
-        },
-      },
-      {
-        $addFields: {
-          averageRating: {
-            $avg: "$reviews.rating",
-          },
-        },
-      },
-      {
-        $sort: {
-          averageRating: -1,
-        },
-      },
-      {
-        $project: {
-          password: 0,
-          fcm_token: 0,
-          security_answer: 0,
-        },
-      },
-    ]);
+  const page = parseInt(req.query.page) || 1;
+  const limit = 10;
+  const skip = (page - 1) * limit;
 
-    res.status(200).json(topRatedJobSeekers);
-  } catch (err) {
-    res.status(422).json({ message: err.message });
-  }
+  // Get total count for pagination info
+  const totalJobSeekers = await User.countDocuments({
+    role: "job_seeker",
+    isDocumentVerified: "verified",
+  });
+
+  const topRatedJobSeekers = await User.aggregate([
+    {
+      $match: {
+        role: "job_seeker",
+        isDocumentVerified: "verified",
+      },
+    },
+    {
+      $lookup: {
+        from: "reviews",
+        localField: "_id",
+        foreignField: "reviewedTo",
+        as: "reviews",
+      },
+    },
+    {
+      $addFields: {
+        averageRating: {
+          $avg: "$reviews.rating",
+        },
+      },
+    },
+    {
+      $sort: {
+        averageRating: -1,
+      },
+    },
+    {
+      $skip: skip,
+    },
+    {
+      $limit: limit,
+    },
+    {
+      $project: {
+        password: 0,
+        fcm_token: 0,
+        security_answer: 0,
+      },
+    },
+  ]);
+
+  // Calculate pagination info
+  const totalPages = Math.ceil(totalJobSeekers / limit);
+  const hasNextPage = page < totalPages;
+  const hasPrevPage = page > 1;
+
+  const paginationInfo = {
+    currentPage: page,
+    totalPages,
+    totalJobSeekers,
+    hasNextPage,
+    hasPrevPage,
+    limit,
+  };
+
+  res.status(StatusCodes.OK).json({
+    data: topRatedJobSeekers,
+    pagination: paginationInfo,
+  });
 });

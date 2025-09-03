@@ -211,7 +211,7 @@ export const nearByGig = catchAsync(async (req, res) => {
     userId: req.user?._id,
     requestId: req.requestId
   });
-  res.status(200).json(result);
+  res.status(StatusCodes.OK).json(result);
 });
 
 /**
