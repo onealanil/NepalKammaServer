@@ -21,6 +21,7 @@ import firebase from "../../../firebase/index.js";
 import { getOrSetCache, clearCache, clearNearbyCache, clearSearchCaches, clearRecommendationCaches, clearNearbyCacheGrid } from "../../../utils/cacheService.js";
 import { StatusCodes } from "http-status-codes";
 import logger from "../../../utils/logger.js";
+import { sendEmailInJobUpdatePending, sendJobCompletionEmail } from "../helper/sendEmailInJobUpdate.js";
 
 function normalizeCoord(coord) {
   return Math.round(coord * 1000) / 1000;
@@ -409,7 +410,13 @@ export const nearBy = catchAsync(async (req, res) => {
   res.status(StatusCodes.OK).json(result);
 });
 
-
+/**
+ * @function recommendationJobs
+ * @description Retrieves recommended jobs for the authenticated user based on their profile and activity.
+ * @param {Object} req - The request object containing user information.
+ * @param {Object} res - The response object to send the response.
+ * @returns - A JSON response containing recommended jobs and metadata about the recommendation process.
+ */
 export const recommendationJobs = catchAsync(async (req, res) => {
   const id = req.user._id;
   if (!id) {
@@ -648,6 +655,60 @@ export const updateJobStatus = catchAsync(async (req, res) => {
   }
 
   const updatedJob = await job.save();
+  /**
+   * send email to assigned user when job is in progress
+  */
+  let emailSent = false;
+  if (job_status === "In_Progress" && assignedTo) {
+    try {
+      const assignedUser = await User.findById(assignedTo);
+      if (assignedUser && assignedUser.email) {
+        await sendEmailInJobUpdatePending({
+          email: assignedUser.email,
+          job_seeker_name: assignedUser.username || "Job Seeker",
+          job_name: job.title,
+          job_provider_name: req.user.username || "Job Provider",
+          job_provider_email: req.user.email,
+          job_provider_phone: req.user.phoneNumber || "Not provided"
+        }, res, req);
+        emailSent = true;
+      }
+    } catch (emailError) {
+      logger.error('Failed to send job assignment email', {
+        error: emailError.message,
+        jobId,
+        assignedTo,
+        requestId: req.requestId
+      });
+    }
+  }
+
+  /**
+   * send email to assigned user when job is completed
+   */
+  if (job_status === "Completed" && assignedTo) {
+    try {
+      const assignedUser = await User.findById(assignedTo);
+      if (assignedUser && assignedUser.email) {
+        await sendJobCompletionEmail({
+          email: assignedUser.email,
+          job_seeker_name: assignedUser.username || "Job Seeker",
+          job_name: job.title,
+          job_provider_name: req.user.username || "Job Provider",
+          job_provider_email: req.user.email,
+          job_provider_phone: req.user.phoneNumber || "Not provided"
+        }, res, req);
+        emailSent = true;
+      }
+    } catch (emailError) {
+      logger.error('Failed to send job assignment email', {
+        error: emailError.message,
+        jobId,
+        assignedTo,
+        requestId: req.requestId
+      });
+    }
+  }
 
   clearCache([
     "jobs_1_5",
@@ -670,7 +731,7 @@ export const updateJobStatus = catchAsync(async (req, res) => {
     requestId: req.requestId
   });
 
-  res.status(StatusCodes.OK).json({ message: "Job status updated", job: updatedJob });
+  res.status(StatusCodes.OK).json({ message: `Job status updated to ${job_status}`, job: updatedJob });
 });
 
 
@@ -695,8 +756,14 @@ export const completedJobs = catchAsync(async (req, res) => {
       "assignedTo",
       "_id username email profilePic onlineStatus can_review"
     )
+    .lean()
     .exec();
 
+  logger.info('Retrieved completed jobs', {
+    userId: req.user._id,
+    jobCount: job.length,
+    requestId: req.requestId
+  });
   res.status(StatusCodes.OK).json({
     job,
   });
@@ -786,6 +853,7 @@ export const getSingleJob = catchAsync(async (req, res) => {
         "assignedTo",
         "username email profilePic onlineStatus skills address location"
       )
+      .lean()
       .exec();
 
     if (!job) {
