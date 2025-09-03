@@ -26,7 +26,7 @@ import logger from "../../../utils/logger.js";
  * @async
  */
 export const createPayment = catchAsync(async (req, res) => {
-  const {job, amount, recieverNumber } = req.body;
+  const { job, amount, recieverNumber } = req.body;
 
   logger.info('Payment creation request', {
     jobId: job,
@@ -93,26 +93,21 @@ export const createPayment = catchAsync(async (req, res) => {
  * @async
  */
 export const getPaymentByProvider = catchAsync(async (req, res) => {
-  try {
-    const payments = await Payment.find({
-      PaymentTo: req.user._id,
-      paymentStatus: { $in: ["provider_paid", "request_payment"] },
-    })
-      .populate("PaymentBy", "username email")
-      .populate("PaymentTo", "username email")
-      .populate({
-        path: "job",
-        populate: {
-          path: "postedBy",
-          select: "username email profilePic",
-        },
-      });
+  const payments = await Payment.find({
+    PaymentTo: req.user._id,
+    paymentStatus: { $in: ["provider_paid", "request_payment"] },
+  })
+    .populate("PaymentBy", "username email")
+    .populate("PaymentTo", "username email")
+    .populate({
+      path: "job",
+      populate: {
+        path: "postedBy",
+        select: "username email profilePic",
+      },
+    });
 
-    res.status(200).json(payments);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get payments" });
-  }
+  res.status(StatusCodes.OK).json(payments);
 });
 
 /**

@@ -17,6 +17,7 @@ export const authLimiter = rateLimit({
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false,
   handler: (req, res) => {
+
     res.status(StatusCodes.TOO_MANY_REQUESTS).json({
       success: false,
       message: "Too many authentication attempts. Please try again in 15 minutes.",

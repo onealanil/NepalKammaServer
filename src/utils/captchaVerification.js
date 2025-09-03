@@ -3,6 +3,13 @@ import logger from "./logger.js";
 
 export const captchaVerification = async (req, res, next) => {
     const captchaToken = req.body.captchaToken;
+    if (!captchaToken) {
+        return res.status(StatusCodes.BAD_REQUEST).json({ message: "Captcha token is missing, please try again later." });
+    }
+    if (!process.env.RECAPTCHA_SECRET_KEY) {
+        logger.error('Recaptcha token is missing, please try again later.', { requestId: req.requestId });
+        return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: "Server configuration error" });
+    }
     const secretKey = process.env.RECAPTCHA_SECRET_KEY;
     const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${captchaToken}`;
     try {

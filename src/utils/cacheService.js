@@ -21,10 +21,10 @@ export const getOrSetCache = async (key, fetchFunction, ttl) => {
   }
   logger.info('Cache miss', { key, requestId: 'cache_service' });
   const freshData = await fetchFunction();
-  
+
   // Convert Mongoose documents to plain objects before caching
   const dataToCache = JSON.parse(JSON.stringify(freshData));
-  
+
   cache.set(key, dataToCache, ttl || 600);
   return freshData; // Return the original data (not stringified) to the route handler
 };
@@ -90,6 +90,26 @@ export const clearRecommendationCaches = () => {
 export const clearAllCaches = () => {
   cache.flushAll();
   logger.info('All caches cleared', { requestId: 'cache_service' });
+};
+
+/**
+ * Clear nearby caches using grid-based pattern to reduce fragmentation
+ */
+export const clearNearbyCacheGrid = (latitude, longitude) => {
+  const gridLat = Math.floor(latitude * 10) / 10;
+  const gridLng = Math.floor(longitude * 10) / 10;
+
+  const keys = cache.keys();
+  const nearbyKeys = keys.filter(key =>
+    key.includes(`nearby_${gridLat}_${gridLng}`)
+  );
+
+  nearbyKeys.forEach(key => {
+    cache.del(key);
+    logger.info('Nearby cache cleared', { key, requestId: 'cache_service' });
+  });
+
+  logger.info(`Cleared ${nearbyKeys.length} nearby cache entries in grid ${gridLat},${gridLng}`);
 };
 
 /**

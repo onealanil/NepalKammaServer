@@ -60,7 +60,7 @@ const JobInfoSchema = new mongoose.Schema(
     },
     job_status: {
       type: String,
-      enum: ["Pending", "In_Progress", "Completed", "Cancelled", "Paid"],
+      enum: ["Pending", "In_Progress", "Completed", "Cancelled", "Paid", "can_delete"],
       default: "Pending",
     },
     priority: {

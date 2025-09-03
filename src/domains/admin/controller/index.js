@@ -127,174 +127,183 @@ export const getAllJobProviders = catchAsync(async (req, res) => {
 
 //get all payments
 export const getAllPayments = catchAsync(async (req, res) => {
-    const { pending_status, assending } = req.query;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 5;
-    let query = {};
-    if (pending_status) {
-      query.paymentStatus = pending_status;
-    } else {
-      delete query.paymentStatus;
-    }
-    let sort = {};
-    if (assending === "true") {
-      sort.createdAt = -1;
-    } else {
-      sort.createdAt = 1;
-    }
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-    const payments = await Payment.find(query)
-      .populate("PaymentBy")
-      .populate("PaymentTo")
-      .populate({
-        path: "job",
-        populate: {
-          path: "postedBy",
-        },
-      })
-      .populate({
-        path: "job",
-        populate: {
-          path: "assignedTo",
-        },
-      })
-      .sort({ createdAt: -1 })
-      .skip(startIndex);
+  const { pending_status, assending } = req.query;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 5;
+  let query = {};
+  if (pending_status) {
+    query.paymentStatus = pending_status;
+  } else {
+    delete query.paymentStatus;
+  }
+  let sort = {};
+  if (assending === "true") {
+    sort.createdAt = -1;
+  } else {
+    sort.createdAt = 1;
+  }
+  const startIndex = (page - 1) * limit;
+  const endIndex = page * limit;
+  const payments = await Payment.find(query)
+    .populate("PaymentBy")
+    .populate("PaymentTo")
+    .populate({
+      path: "job",
+      populate: {
+        path: "postedBy",
+      },
+    })
+    .populate({
+      path: "job",
+      populate: {
+        path: "assignedTo",
+      },
+    })
+    .sort({ createdAt: -1 })
+    .skip(startIndex);
 
-    const totalPayments = await Payment.countDocuments(query);
-    const totalPages = Math.ceil(totalPayments / limit);
-    logger.info('Admin retrieved payments', {
-      adminId: req.user._id,
-      page,
-      totalPayments,
-      pending_status,
-      requestId: req.requestId
-    });
-    res.json({ payments, currentPage: page, totalPages, totalPayments });
+  const totalPayments = await Payment.countDocuments(query);
+  const totalPages = Math.ceil(totalPayments / limit);
+  logger.info('Admin retrieved payments', {
+    adminId: req.user._id,
+    page,
+    totalPayments,
+    pending_status,
+    requestId: req.requestId
+  });
+  res.json({ payments, currentPage: page, totalPages, totalPayments });
 });
 
 //get all jobs
 export const getAllJobs = catchAsync(async (req, res) => {
-    const { status, assending } = req.query;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 5;
-    let query = {};
-    if (status) {
-      query.job_status = status;
-    } else {
-      delete query.job_status;
-    }
-    let sort = {};
-    if (assending === "true") {
-      sort.createdAt = -1;
-    } else {
-      sort.createdAt = 1;
-    }
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-    const jobs = await Job.find(query)
-      .populate("assignedTo")
-      .populate("postedBy")
-      .sort(sort)
-      .skip(startIndex);
-    const totalJobs = await Job.countDocuments(query);
-    const totalPages = Math.ceil(totalJobs / limit);
-    logger.info('Admin retrieved jobs', {
-      adminId: req.user._id,
-      page,
-      totalJobs,
-      status,
-      requestId: req.requestId
-    });
-    res.json({ jobs, currentPage: page, totalPages, totalJobs });
+  const { status, assending } = req.query;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 5;
+  let query = {};
+  if (status) {
+    query.job_status = status;
+  } else {
+    delete query.job_status;
+  }
+  let sort = {};
+  if (assending === "true") {
+    sort.createdAt = -1;
+  } else {
+    sort.createdAt = 1;
+  }
+  const startIndex = (page - 1) * limit;
+  const endIndex = page * limit;
+  const jobs = await Job.find(query)
+    .populate("assignedTo")
+    .populate("postedBy")
+    .sort(sort)
+    .skip(startIndex);
+  const totalJobs = await Job.countDocuments(query);
+  const totalPages = Math.ceil(totalJobs / limit);
+  logger.info('Admin retrieved jobs', {
+    adminId: req.user._id,
+    page,
+    totalJobs,
+    status,
+    requestId: req.requestId
+  });
+  res.json({ jobs, currentPage: page, totalPages, totalJobs });
 });
 
 //get all gigs
 export const getAllGigs = catchAsync(async (req, res) => {
-    const { assending } = req.query;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 5;
-    let query = {};
+  const { assending } = req.query;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 5;
+  let query = {};
 
-    let sort = {};
-    if (assending === "true") {
-      sort.createdAt = -1;
-    } else {
-      sort.createdAt = 1;
-    }
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-    const gigs = await Gig.find(query)
-      .populate("postedBy")
-      .sort(sort)
-      .skip(startIndex);
-    const totalGigs = await Gig.countDocuments(query);
-    const totalPages = Math.ceil(totalGigs / limit);
-    logger.info('Admin retrieved gigs', {
-      adminId: req.user._id,
-      page,
-      totalGigs,
-      requestId: req.requestId
-    });
-    res.json({ gigs, currentPage: page, totalPages, totalGigs });
+  let sort = {};
+  if (assending === "true") {
+    sort.createdAt = -1;
+  } else {
+    sort.createdAt = 1;
+  }
+  const startIndex = (page - 1) * limit;
+  const endIndex = page * limit;
+  const gigs = await Gig.find(query)
+    .populate("postedBy")
+    .sort(sort)
+    .skip(startIndex);
+  const totalGigs = await Gig.countDocuments(query);
+  const totalPages = Math.ceil(totalGigs / limit);
+  logger.info('Admin retrieved gigs', {
+    adminId: req.user._id,
+    page,
+    totalGigs,
+    requestId: req.requestId
+  });
+  res.json({ gigs, currentPage: page, totalPages, totalGigs });
 });
 
 //completed payment
 export const completedPayment = catchAsync(async (req, res) => {
-    const { paymentId } = req.params;
-    const { freelancerId, jobProviderId, amount } = req.body;
-    const freelancer = await User.findById(freelancerId);
-    const jobProvider = await User.findById(jobProviderId);
+  const { paymentId } = req.params;
+  const { freelancerId, jobProviderId, amount, jobId } = req.body;
+  const freelancer = await User.findById(freelancerId);
+  const jobProvider = await User.findById(jobProviderId);
+  const job = await Job.findById(jobId);
 
-    if (!freelancer || !jobProvider) {
-      return res.status(404).json({ message: "User not found" });
-    }
+  if (!job) {
+    return res.status(StatusCodes.NOT_FOUND).json({ message: "Job not found" });
+  }
 
-    const payment = await Payment.findById(paymentId);
-    if (!payment) {
-      return res.status(404).json({ message: "Payment not found" });
-    }
+  if (!freelancer || !jobProvider) {
+    return res.status(StatusCodes.NOT_FOUND).json({ message: "User not found" });
+  }
 
-    freelancer.totalIncome += amount;
-    freelancer.can_review.push({ user: jobProviderId });
-    await freelancer.save();
+  const payment = await Payment.findById(paymentId);
+  if (!payment) {
+    return res.status(StatusCodes.NOT_FOUND).json({ message: "Payment not found" });
+  }
 
-    payment.paymentStatus = "Completed";
-    await payment.save();
+  freelancer.totalIncome += amount;
+  freelancer.can_review.push({ user: jobProviderId });
+  await freelancer.save();
 
-    jobProvider.totalAmountPaid += amount;
-    if ((jobProvider.totalCompletedJobs + 1) % 5 === 0) {
-      jobProvider.mileStone += 1;
-      jobProvider.totalCompletedJobs += 1;
-    } else {
-      jobProvider.totalCompletedJobs += 1;
-    }
-    jobProvider.can_review.push({ user: freelancerId });
-    await jobProvider.save();
+  payment.paymentStatus = "Completed";
+  await payment.save();
 
-    logger.info('Payment completed successfully', {
-      adminId: req.user._id,
-      paymentId,
-      freelancerId,
-      jobProviderId,
-      amount,
-      requestId: req.requestId
-    });
+  jobProvider.totalAmountPaid += amount;
+  if ((jobProvider.totalCompletedJobs + 1) % 5 === 0) {
+    jobProvider.mileStone += 1;
+    jobProvider.totalCompletedJobs += 1;
+  } else {
+    jobProvider.totalCompletedJobs += 1;
+  }
+  jobProvider.can_review.push({ user: freelancerId });
+  await jobProvider.save();
 
-    res.status(200).json({ message: "Payment completed successfully" });
+  job.job_status = "can_delete";
+  await job.save();
+
+  logger.info('Payment completed successfully', {
+    adminId: req.user._id,
+    paymentId,
+    freelancerId,
+    jobProviderId,
+    amount,
+    jobId,
+    requestId: req.requestId
+  });
+
+  res.status(200).json({ message: "Payment completed successfully" });
 });
 
 //verfiy document
 export const verifyDocument = catchAsync(async (req, res) => {
-    const { userId } = req.params;
-    const user = await User.findById(userId);
-    if (!user) {
-      res.status(200).json({ message: "User not found!" });
-    }
+  const { userId } = req.params;
+  const user = await User.findById(userId);
+  if (!user) {
+    return res.status(StatusCodes.NOT_FOUND).json({ message: "User not found!" });
+  }
 
-    sendEmail(user.email);
-
+  try {
+    await sendEmail({ email: user.email }, res, req);
     user.isDocumentVerified = "verified";
     await user.save();
 
@@ -306,119 +315,128 @@ export const verifyDocument = catchAsync(async (req, res) => {
     });
 
     res.status(200).json({ message: "User Successfully verified" });
+  } catch (error) {
+    logger.error('Email sending failed', {
+      error: error.message,
+      userId,
+      requestId: req.requestId
+    });
+    return res.status(500).json({ message: "Failed to send verification email" });
+  }
+
 });
 
 //reject document
 export const rejectDocument = catchAsync(async (req, res) => {
-    const { userId } = req.params;
-    const user = await User.findById(userId);
-    if (!user) {
-      res.status(200).json({ message: "User not found!" });
-    }
+  const { userId } = req.params;
+  const user = await User.findById(userId);
+  if (!user) {
+    res.status(200).json({ message: "User not found!" });
+  }
 
-    user.isDocumentVerified = "is_not_verified";
-    user.documents = [];
-    await user.save();
+  user.isDocumentVerified = "is_not_verified";
+  user.documents = [];
+  await user.save();
 
-    logger.info('User document rejected successfully', {
-      adminId: req.user._id,
-      userId,
-      email: user.email,
-      requestId: req.requestId
-    });
+  logger.info('User document rejected successfully', {
+    adminId: req.user._id,
+    userId,
+    email: user.email,
+    requestId: req.requestId
+  });
 
-    res.status(200).json({ message: "User document rejected" });
+  res.status(200).json({ message: "User document rejected" });
 });
 
 //get all reports
 export const getAllReports = catchAsync(async (req, res) => {
-    const { assending } = req.query;
-    let sort = {};
-    if (assending === "true") {
-      sort.createdAt = -1;
-    } else {
-      sort.createdAt = 1;
-    }
+  const { assending } = req.query;
+  let sort = {};
+  if (assending === "true") {
+    sort.createdAt = -1;
+  } else {
+    sort.createdAt = 1;
+  }
 
-    const reports = await Report.find()
-      .populate("reportedBy")
-      .populate("reportedTo")
-      .sort(sort);
+  const reports = await Report.find()
+    .populate("reportedBy")
+    .populate("reportedTo")
+    .sort(sort);
 
-    logger.info('Admin retrieved reports', {
-      adminId: req.user._id,
-      reports: reports.length,
-      requestId: req.requestId
-    });
+  logger.info('Admin retrieved reports', {
+    adminId: req.user._id,
+    reports: reports.length,
+    requestId: req.requestId
+  });
 
-    res.status(200).json({ reports });
+  res.status(200).json({ reports });
 });
 
 //deactivate user
 export const deactivateUser = catchAsync(async (req, res) => {
-    const { userId } = req.params;
-    const user = await User.findById(userId);
-    if (!user) {
-      res.status(200).json({ message: "User not found!" });
-    }
+  const { userId } = req.params;
+  const user = await User.findById(userId);
+  if (!user) {
+    res.status(200).json({ message: "User not found!" });
+  }
 
-    user.userAccountStatus = "Deactivated";
-    user.onlineStatus = false;
+  user.userAccountStatus = "Deactivated";
+  user.onlineStatus = false;
 
-    await Job.updateMany(
-      { postedBy: userId },
-      { $set: { visibility: "private" } }
-    );
-    await Gig.updateMany(
-      { postedBy: userId },
-      { $set: { visibility: "private" } }
-    );
+  await Job.updateMany(
+    { postedBy: userId },
+    { $set: { visibility: "private" } }
+  );
+  await Gig.updateMany(
+    { postedBy: userId },
+    { $set: { visibility: "private" } }
+  );
 
-    emitAccountDeactivation(req.app.get("io"), userId.toString(), {
-      message: "Your account has been deactivated by the admin.",
-    });
+  emitAccountDeactivation(req.app.get("io"), userId.toString(), {
+    message: "Your account has been deactivated by the admin.",
+  });
 
-    await user.save();
+  await user.save();
 
-    logger.info('User deactivated successfully', {
-      adminId: req.user._id,
-      userId,
-      email: user.email,
-      requestId: req.requestId
-    });
+  logger.info('User deactivated successfully', {
+    adminId: req.user._id,
+    userId,
+    email: user.email,
+    requestId: req.requestId
+  });
 
-    res.status(200).json({ message: "User Successfully deactivated" });
+  res.status(200).json({ message: "User Successfully deactivated" });
 });
 
 //activate user
 export const activateUser = catchAsync(async (req, res) => {
-    const { userId } = req.params;
-    const user = await User.findById(userId);
-    if (!user) {
-      res.status(200).json({ message: "User not found!" });
-    }
+  const { userId } = req.params;
+  const user = await User.findById(userId);
+  if (!user) {
+    res.status(200).json({ message: "User not found!" });
+  }
 
-    user.userAccountStatus = "Active";
+  user.userAccountStatus = "Active";
 
-    await Job.updateMany(
-      { postedBy: userId },
-      { $set: { visibility: "public" } }
-    );
-    await Gig.updateMany(
-      { postedBy: userId },
-      { $set: { visibility: "public" } }
-    );
+  await Job.updateMany(
+    { postedBy: userId },
+    { $set: { visibility: "public" } }
+  );
+  await Gig.updateMany(
+    { postedBy: userId },
+    { $set: { visibility: "public" } }
+  );
 
-    await user.save();
+  await user.save();
 
-    logger.info('User activated successfully', {
-      adminId: req.user._id,
-      userId,
-      email: user.email,
-      requestId: req.requestId
-    });
+  logger.info('User activated successfully', {
+    adminId: req.user._id,
+    userId,
+    email: user.email,
+    requestId: req.requestId
+  });
 
-    res.status(200).json({ message: "User Successfully activated" });
+  res.status(200).json({ message: "User Successfully activated" });
 });
 
 //get all the deactivate accounts
@@ -436,44 +454,44 @@ export const getAllDeactivatedAccounts = catchAsync(async (req, res) => {
 
 //user growth
 export const getUserGrowth = catchAsync(async (req, res) => {
-    const userGrowthData = await User.aggregate([
-      {
-        $match: {
-          createdAt: { $ne: null },
-        },
+  const userGrowthData = await User.aggregate([
+    {
+      $match: {
+        createdAt: { $ne: null },
       },
-      {
-        $group: {
-          _id: {
-            $dateToString: {
-              format: "%Y-%m",
-              date: "$createdAt",
-            },
+    },
+    {
+      $group: {
+        _id: {
+          $dateToString: {
+            format: "%Y-%m",
+            date: "$createdAt",
           },
-          uv: { $sum: 1 },
         },
+        uv: { $sum: 1 },
       },
-      {
-        $sort: {
-          _id: 1,
-        },
+    },
+    {
+      $sort: {
+        _id: 1,
       },
-    ]);
+    },
+  ]);
 
-    const response = userGrowthData.map((item) => ({
-      name: item._id,
-      uv: item.uv,
-      pv: 0,
-      amt: 0,
-    }));
+  const response = userGrowthData.map((item) => ({
+    name: item._id,
+    uv: item.uv,
+    pv: 0,
+    amt: 0,
+  }));
 
-    logger.info('Admin retrieved user growth', {
-      adminId: req.user._id,
-      userGrowthData: response,
-      requestId: req.requestId
-    });
+  logger.info('Admin retrieved user growth', {
+    adminId: req.user._id,
+    userGrowthData: response,
+    requestId: req.requestId
+  });
 
-    res.status(200).json({ userGrowthData: response });
+  res.status(200).json({ userGrowthData: response });
 });
 
 //send push notification to all users

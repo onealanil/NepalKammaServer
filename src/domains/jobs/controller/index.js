@@ -18,7 +18,7 @@ import NotificationModel from "../../../../models/Notification.js";
 import User from "../../../../models/User.js";
 import { emitNotification } from "../../../../socketHandler.js";
 import firebase from "../../../firebase/index.js";
-import { getOrSetCache, clearCache, clearNearbyCache, clearSearchCaches, clearRecommendationCaches } from "../../../utils/cacheService.js";
+import { getOrSetCache, clearCache, clearNearbyCache, clearSearchCaches, clearRecommendationCaches, clearNearbyCacheGrid } from "../../../utils/cacheService.js";
 import { StatusCodes } from "http-status-codes";
 import logger from "../../../utils/logger.js";
 
@@ -57,6 +57,32 @@ export const createJob = catchAsync(async (req, res) => {
     category,
     requestId: req.requestId
   });
+
+  const userJobCount = await Job.countDocuments({
+    postedBy: req.user._id,
+  });
+
+  /**
+   * limit user to create maximum 10 jobs
+   */
+
+  const MAX_JOBS_PER_USER = 10;
+
+  if (userJobCount >= MAX_JOBS_PER_USER) {
+    logger.warn('Job creation limit exceeded', {
+      userId: req.user._id,
+      currentJobs: userJobCount,
+      limit: MAX_JOBS_PER_USER,
+      requestId: req.requestId
+    });
+
+    return res.status(StatusCodes.TOO_MANY_REQUESTS).json({
+      message: `You cannot create more than ${MAX_JOBS_PER_USER} active jobs.`,
+      solution: "Please complete or delete some of your existing jobs before creating new ones.",
+      currentJobs: userJobCount,
+      maxAllowed: MAX_JOBS_PER_USER,
+    });
+  }
 
   let experiesIndate = new Date();
   let priority = "Low";
@@ -227,16 +253,17 @@ export const createJob = catchAsync(async (req, res) => {
     }
   });
 
+  const gridLat = Math.floor(latitude * 10) / 10;
+  const gridLng = Math.floor(longitude * 10) / 10;
+
   clearCache([
-    "jobs_1_5", // First page of jobs
-    `nearby_${normalizeCoord(latitude)}_${normalizeCoord(longitude)}`,
+    "jobs_1_5",
     `user_jobs${req.user._id}`,
     `recent_public_jobs`,
     `recommendations_${req.user._id}`
   ]);
 
-  clearNearbyCache();
-
+  clearNearbyCacheGrid(gridLat, gridLng);
   clearSearchCaches();
   clearRecommendationCaches();
 
@@ -262,10 +289,8 @@ export const getJob = catchAsync(async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 5;
 
-  // Calculate the index of the first item for the current page
   const startIndex = (page - 1) * limit;
 
-  // Create a unique cache key based on the request parameters
   const cacheKey = `jobs_${page}_${limit}`;
 
   const result = await getOrSetCache(cacheKey, async () => {
@@ -273,13 +298,14 @@ export const getJob = catchAsync(async (req, res) => {
       visibility: "public",
       job_status: "Pending",
     })
-      .sort({ createdAt: -1 })
+      .sort({ priority: -1, createdAt: -1 })
       .populate(
         "postedBy",
         "username email profilePic onlineStatus can_review"
       )
       .skip(startIndex)
       .limit(limit)
+      .lean()
       .exec();
 
     const totalJobs = await Job.countDocuments({
@@ -313,6 +339,7 @@ export const getSingleUserJobs = catchAsync(async (req, res) => {
         "assignedTo",
         "username email profilePic onlineStatus skills address location"
       )
+      .lean()
       .exec();
     return { userJobs };
   }, 600);
@@ -334,7 +361,9 @@ export const nearBy = catchAsync(async (req, res) => {
   const { latitude, longitude } = req.params;
 
 
-  const cacheKey = `nearby_${normalizeCoord(latitude)}_${normalizeCoord(longitude)}`;
+  const gridLat = Math.floor(latitude * 10) / 10;
+  const gridLng = Math.floor(longitude * 10) / 10;
+  const cacheKey = `nearby_${gridLat}_${gridLng}`;
 
   const result = await getOrSetCache(cacheKey, async () => {
     const nearBy = await Job.aggregate([
@@ -363,6 +392,7 @@ export const nearBy = catchAsync(async (req, res) => {
         "username email profilePic onlineStatus can_review"
       )
       .limit(8)
+      .lean()
       .exec();
 
     return { nearBy: populatedJobs };
@@ -528,7 +558,8 @@ export const searchJob = catchAsync(async (req, res) => {
         "username email profilePic onlineStatus can_review"
       )
       .skip((page - 1) * limit)
-      .limit(limit);
+      .limit(limit)
+      .lean();
 
     const totalJobs = await Job.countDocuments(query);
 
@@ -549,11 +580,6 @@ export const searchJob = catchAsync(async (req, res) => {
 
   res.status(StatusCodes.OK).json(result);
 });
-
-// Function to escape regular expression special characters
-function escapeRegex(text) {
-  return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
-}
 
 /**
  * @function updateJobStatus
@@ -581,6 +607,11 @@ export const updateJobStatus = catchAsync(async (req, res) => {
     return res.status(StatusCodes.NOT_FOUND).json({ message: "Job not found" });
   }
 
+  // Get coordinates from the job before deleting
+  const coordinates = job.address.coordinates;
+  const jobLng = coordinates[0];
+  const jobLat = coordinates[1];
+
   if (job_status === "Cancelled") {
     if (!job.assignedTo) {
       return res.status(StatusCodes.BAD_REQUEST).json({ message: "Job is already unassigned" });
@@ -590,15 +621,15 @@ export const updateJobStatus = catchAsync(async (req, res) => {
     job.assignedTo = null;
     const updatedJob = await job.save();
 
+
     clearCache([
       "jobs_1_5",
-      `nearby_${normalizeCoord(jobLat)}_${normalizeCoord(jobLng)}`,
       `user_jobs${req.user._id}`,
       `single_job_${jobId}`,
       `recent_public_jobs`
     ]);
 
-    clearNearbyCache();
+    clearNearbyCacheGrid(jobLat, jobLng);
     clearSearchCaches();
     clearRecommendationCaches();
 
@@ -620,14 +651,13 @@ export const updateJobStatus = catchAsync(async (req, res) => {
 
   clearCache([
     "jobs_1_5",
-    `nearby_${normalizeCoord(jobLat)}_${normalizeCoord(jobLng)}`,
     `user_jobs${req.user._id}`,
     `single_job_${jobId}`,
     `recent_public_jobs`
   ]);
 
   if (job_status !== "Pending") {
-    clearNearbyCache();
+    clearNearbyCacheGrid(jobLat, jobLng);
     clearSearchCaches();
     clearRecommendationCaches();
   }
@@ -701,19 +731,20 @@ export const deleteJobs = catchAsync(async (req, res) => {
 
   // Get coordinates from the job before deleting
   const coordinates = job.address.coordinates;
+  const jobLng = coordinates[0];
+  const jobLat = coordinates[1];
 
   await Job.findByIdAndDelete(jobId);
 
   clearCache([
     "jobs_1_5",
-    `nearby_${normalizeCoord(jobLat)}_${normalizeCoord(jobLng)}`,
     `user_jobs${req.user._id}`,
     `single_job_${jobId}`,
     `recent_public_jobs`
   ]);
 
   // Clear all related caches
-  clearNearbyCache();
+  clearNearbyCacheGrid(jobLat, jobLng);
   clearSearchCaches();
   clearRecommendationCaches();
 
