@@ -17,16 +17,11 @@ import recommendJobs from "../helper/JobRecommendation.js";
 import NotificationModel from "../../../../models/Notification.js";
 import User from "../../../../models/User.js";
 import { emitNotification } from "../../../../socketHandler.js";
-import firebase from "../../../firebase/index.js";
-import { getOrSetCache, clearCache, clearNearbyCache, clearSearchCaches, clearRecommendationCaches, clearNearbyCacheGrid } from "../../../utils/cacheService.js";
+import { getOrSetCache, clearCache, clearSearchCaches, clearRecommendationCaches, clearNearbyCacheGrid } from "../../../utils/cacheService.js";
 import { StatusCodes } from "http-status-codes";
 import logger from "../../../utils/logger.js";
 import { sendEmailInJobUpdatePending, sendJobCompletionEmail } from "../helper/sendEmailInJobUpdate.js";
-
-function normalizeCoord(coord) {
-  return Math.round(coord * 1000) / 1000;
-}
-
+import mongoose from "mongoose";
 
 /**
  * @function createJob
@@ -38,243 +33,222 @@ function normalizeCoord(coord) {
  * @async
  */
 export const createJob = catchAsync(async (req, res) => {
-  const {
-    title,
-    location,
-    latitude,
-    longitude,
-    phoneNumber,
-    skills_required,
-    job_description,
-    payment_method,
-    price,
-    category,
-    experiesInHrs,
-  } = req.body;
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  logger.info('Job creation request received', {
-    userId: req.user._id,
-    title,
-    category,
-    requestId: req.requestId
-  });
+  try {
+    const {
+      title,
+      location,
+      latitude,
+      longitude,
+      phoneNumber,
+      skills_required,
+      job_description,
+      payment_method,
+      price,
+      category,
+      experiesInHrs,
+    } = req.body;
 
-  const userJobCount = await Job.countDocuments({
-    postedBy: req.user._id,
-  });
-
-  /**
-   * limit user to create maximum 10 jobs
-   */
-
-  const MAX_JOBS_PER_USER = 10;
-
-  if (userJobCount >= MAX_JOBS_PER_USER) {
-    logger.warn('Job creation limit exceeded', {
+    logger.info('Job creation request received', {
       userId: req.user._id,
-      currentJobs: userJobCount,
-      limit: MAX_JOBS_PER_USER,
+      title,
+      category,
       requestId: req.requestId
     });
 
-    return res.status(StatusCodes.TOO_MANY_REQUESTS).json({
-      message: `You cannot create more than ${MAX_JOBS_PER_USER} active jobs.`,
-      solution: "Please complete or delete some of your existing jobs before creating new ones.",
-      currentJobs: userJobCount,
-      maxAllowed: MAX_JOBS_PER_USER,
+    const userJobCount = await Job.countDocuments({
+      postedBy: req.user._id,
     });
-  }
 
-  let experiesIndate = new Date();
-  let priority = "Low";
+    /**
+     * limit user to create maximum 10 jobs
+     */
 
-  if (typeof experiesInHrs === "number") {
-    experiesInHrs.toString();
-  }
+    const MAX_JOBS_PER_USER = 10;
 
-  if (experiesInHrs === "6") {
-    experiesIndate = new Date(new Date().getTime() + 6 * 60 * 60 * 1000);
-    priority = "Urgent";
-  } else if (experiesInHrs === "12") {
-    experiesIndate = new Date(new Date().getTime() + 12 * 60 * 60 * 1000);
-    priority = "Medium";
-  } else if (experiesInHrs === "24") {
-    experiesIndate = new Date(new Date().getTime() + 24 * 60 * 60 * 1000);
-    priority = "Low";
-  } else {
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: "Invalid experiesInHrs" });
-  }
+    if (userJobCount >= MAX_JOBS_PER_USER) {
+      logger.warn('Job creation limit exceeded', {
+        userId: req.user._id,
+        currentJobs: userJobCount,
+        limit: MAX_JOBS_PER_USER,
+        requestId: req.requestId
+      });
 
-  const jobData = new Job({
-    title,
-    location,
-    address: {
-      coordinates: [longitude, latitude],
-    },
-    phoneNumber,
-    skills_required,
-    job_description,
-    payment_method,
-    price,
-    category,
-    postedBy: req.user._id,
-    experiesIn: experiesIndate,
-    priority: priority,
-  });
-
-  await jobData.save();
-
-  // Create notifications for job seekers with matching skills
-  const jobSeekers = await User.find({
-    role: "job_seeker",
-    skills: { $in: skills_required },
-  });
-
-  const notifications = await Promise.all(
-    jobSeekers.map(async (jobSeeker) => {
-      const sender = await User.findById(req.user._id);
-      return {
-        senderId: req.user._id,
-        senderUsername: sender.username,
-        senderProfilePic: sender.profilePic?.url,
-        recipientId: jobSeeker._id,
-        jobId: jobData._id,
-        notification: `${title} - ${job_description}`,
-        type: "job_posted",
-        onlineStatus: sender.onlineStatus,
-        fcm_token: jobSeeker.fcm_token,
-      };
-    })
-  );
-  await NotificationModel.insertMany(notifications); experiesIndate
-  notifications.forEach((notification) => {
-    if (notification.onlineStatus) {
-      emitNotification(req.app.get("io"), notification.recipientId.toString(), {
-        senderId: notification.senderId,
-        recipientId: notification.recipientId,
-        notification: notification.notification,
-        profilePic: notification.senderProfilePic,
-        senderUsername: notification.senderUsername,
-        type: "job_posted",
+      return res.status(StatusCodes.TOO_MANY_REQUESTS).json({
+        message: `You cannot create more than ${MAX_JOBS_PER_USER} active jobs.`,
+        solution: "Please complete or delete some of your existing jobs before creating new ones.",
+        currentJobs: userJobCount,
+        maxAllowed: MAX_JOBS_PER_USER,
       });
     }
-  });
 
-  const sendNotificationRecommendation = async (notification) => {
-    try {
-      await firebase.messaging().send({
-        token: notification?.fcm_token,
-        notification: {
-          title:
-            notification.senderUsername + ": Job Recommendation for you🎆😍",
-          body: title,
-        },
-      });
-    } catch (err) {
-      console.error(err);
+    let experiesIndate = new Date();
+    let priority = "Low";
+
+    if (typeof experiesInHrs === "number") {
+      experiesInHrs.toString();
     }
-  };
 
-  // Send push notifications to job seekers with matching skills
-  notifications.forEach(async (notification) => {
-    if (notification.fcm_token) {
-      sendNotificationRecommendation(notification);
+    if (experiesInHrs === "6") {
+      experiesIndate = new Date(new Date().getTime() + 6 * 60 * 60 * 1000);
+      priority = "Urgent";
+    } else if (experiesInHrs === "12") {
+      experiesIndate = new Date(new Date().getTime() + 12 * 60 * 60 * 1000);
+      priority = "Medium";
+    } else if (experiesInHrs === "24") {
+      experiesIndate = new Date(new Date().getTime() + 24 * 60 * 60 * 1000);
+      priority = "Low";
+    } else {
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: "Invalid experiesInHrs" });
     }
-  });
 
-  // Create notifications for nearby job seekers
-  const nearbyJobSeekers = await User.aggregate([
-    {
-      $geoNear: {
-        near: {
-          type: "Point",
-          coordinates: [parseFloat(longitude), parseFloat(latitude)],
-        },
-        key: "address.coordinates",
-        maxDistance: 10000, // 10km
-        distanceField: "distance",
-        spherical: true,
+    const jobData = new Job({
+      title,
+      location,
+      address: {
+        coordinates: [longitude, latitude],
       },
-    },
-    {
-      $match: {
-        role: "job_seeker",
-      },
-    },
-  ]);
+      phoneNumber,
+      skills_required,
+      job_description,
+      payment_method,
+      price,
+      category,
+      postedBy: req.user._id,
+      experiesIn: experiesIndate,
+      priority: priority,
+    });
 
-  const locationNotifications = await Promise.all(
-    nearbyJobSeekers.map(async (jobSeeker) => {
-      const sender = await User.findById(req.user._id);
-      return {
-        senderId: req.user._id,
-        senderUsername: sender.username,
-        senderProfilePic: sender.profilePic?.url,
-        recipientId: jobSeeker._id,
-        jobId: jobData._id,
-        notification: `${title} - ${job_description}`,
-        type: "job_posted_location",
-        onlineStatus: sender.onlineStatus,
-        fcm_token: jobSeeker.fcm_token,
-      };
-    })
-  );
-  await NotificationModel.insertMany(locationNotifications);
-  locationNotifications.forEach((notification) => {
-    if (notification.onlineStatus) {
-      emitNotification(req.app.get("io"), notification.recipientId.toString(), {
-        senderId: notification.senderId,
-        recipientId: notification.recipientId,
-        notification: notification.notification,
-        profilePic: notification.senderProfilePic,
-        senderUsername: notification.senderUsername,
-        type: "job_posted_location",
-      });
-    }
-  });
+    await jobData.save({ session });
 
-  const sendNotificationNearBy = async (notification) => {
-    try {
-      await firebase.messaging().send({
-        token: notification?.fcm_token,
-        notification: {
-          title: `Job found in ${location}🎆😍`,
-          body: title,
+    // Create notifications for job seekers with matching skills
+    const jobSeekers = await User.find({
+      role: "job_seeker",
+      skills: { $in: skills_required },
+    }).session(session);
+
+    const notifications = await Promise.all(
+      jobSeekers.map(async (jobSeeker) => {
+        const sender = await User.findById(req.user._id);
+        return {
+          senderId: req.user._id,
+          senderUsername: sender.username,
+          senderProfilePic: sender.profilePic?.url,
+          recipientId: jobSeeker._id,
+          jobId: jobData._id,
+          notification: `${title} - ${job_description}`,
+          type: "job_posted",
+          onlineStatus: sender.onlineStatus,
+          fcm_token: jobSeeker.fcm_token,
+        };
+      })
+    );
+    await NotificationModel.insertMany(notifications, { session });
+
+    notifications.forEach((notification) => {
+      if (notification.onlineStatus) {
+        emitNotification(req.app.get("io"), notification.recipientId.toString(), {
+          senderId: notification.senderId,
+          recipientId: notification.recipientId,
+          notification: notification.notification,
+          profilePic: notification.senderProfilePic,
+          senderUsername: notification.senderUsername,
+          type: "job_posted",
+        });
+      }
+    });
+
+    // Create notifications for nearby job seekers
+    const nearbyJobSeekers = await User.aggregate([
+      {
+        $geoNear: {
+          near: {
+            type: "Point",
+            coordinates: [parseFloat(longitude), parseFloat(latitude)],
+          },
+          key: "address.coordinates",
+          maxDistance: 10000, // 10km
+          distanceField: "distance",
+          spherical: true,
         },
-      });
-    } catch (err) {
-      console.error(err);
-    }
-  };
+      },
+      {
+        $match: {
+          role: "job_seeker",
+        },
+      },
+    ]);
 
-  // Send push notifications to job seekers with matching skills
-  locationNotifications.forEach(async (notification) => {
-    if (notification.fcm_token) {
-      sendNotificationNearBy(notification);
-    }
-  });
+    const locationNotifications = await Promise.all(
+      nearbyJobSeekers.map(async (jobSeeker) => {
+        const sender = await User.findById(req.user._id);
+        return {
+          senderId: req.user._id,
+          senderUsername: sender.username,
+          senderProfilePic: sender.profilePic?.url,
+          recipientId: jobSeeker._id,
+          jobId: jobData._id,
+          notification: `${title} - ${job_description}`,
+          type: "job_posted_location",
+          onlineStatus: sender.onlineStatus,
+          fcm_token: jobSeeker.fcm_token,
+        };
+      })
+    );
 
-  const gridLat = Math.floor(latitude * 10) / 10;
-  const gridLng = Math.floor(longitude * 10) / 10;
+    await NotificationModel.insertMany(locationNotifications, { session });
 
-  clearCache([
-    "jobs_1_5",
-    `user_jobs${req.user._id}`,
-    `recent_public_jobs`,
-    `recommendations_${req.user._id}`
-  ]);
+    locationNotifications.forEach((notification) => {
+      if (notification.onlineStatus) {
+        emitNotification(req.app.get("io"), notification.recipientId.toString(), {
+          senderId: notification.senderId,
+          recipientId: notification.recipientId,
+          notification: notification.notification,
+          profilePic: notification.senderProfilePic,
+          senderUsername: notification.senderUsername,
+          type: "job_posted_location",
+        });
+      }
+    });
 
-  clearNearbyCacheGrid(gridLat, gridLng);
-  clearSearchCaches();
-  clearRecommendationCaches();
 
-  logger.info('Job created successfully', {
-    jobId: jobData._id,
-    userId: req.user._id,
-    requestId: req.requestId
-  });
+    await session.commitTransaction();
+    session.endSession();
 
-  res.status(StatusCodes.CREATED).json({ message: "Successfully! created", job: jobData });
+    const gridLat = Math.floor(latitude * 10) / 10;
+    const gridLng = Math.floor(longitude * 10) / 10;
+
+    clearCache([
+      "jobs_1_5",
+      `user_jobs${req.user._id}`,
+      `recent_public_jobs`,
+      `recommendations_${req.user._id}`
+    ]);
+
+    clearNearbyCacheGrid(gridLat, gridLng);
+    clearSearchCaches();
+    clearRecommendationCaches();
+
+    logger.info('Job created successfully', {
+      jobId: jobData._id,
+      userId: req.user._id,
+      requestId: req.requestId
+    });
+
+    res.status(StatusCodes.CREATED).json({ message: "Successfully! created", job: jobData });
+  }
+  catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    logger.error('Job creation failed', {
+      error: error.message,
+      userId: req.user._id,
+      requestId: req.requestId
+    });
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: "Failed to create job", error: error.message });
+  }
 });
 
 /**

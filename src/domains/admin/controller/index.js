@@ -10,6 +10,7 @@ import firebase from "../../../firebase/index.js";
 import { StatusCodes } from "http-status-codes";
 import logger from "../../../utils/logger.js";
 import { sendPaymentTransparencyAppreciationEmail, sendPaymentVerificationSuccessEmail } from "../helper/SendEmailPaymentAdmin.js";
+import mongoose from "mongoose";
 
 //count all freelancers, job, gigs, and job_providers
 export const countAll = catchAsync(async (req, res) => {
@@ -245,86 +246,123 @@ export const getAllGigs = catchAsync(async (req, res) => {
 export const completedPayment = catchAsync(async (req, res) => {
   const { paymentId } = req.params;
   const { freelancerId, jobProviderId, amount, jobId } = req.body;
-  const freelancer = await User.findById(freelancerId);
-  const jobProvider = await User.findById(jobProviderId);
-  const job = await Job.findById(jobId);
 
-  if (!job) {
-    return res.status(StatusCodes.NOT_FOUND).json({ message: "Job not found" });
-  }
-
-  if (!freelancer || !jobProvider) {
-    return res.status(StatusCodes.NOT_FOUND).json({ message: "User not found" });
-  }
-
-  const payment = await Payment.findById(paymentId);
-  if (!payment) {
-    return res.status(StatusCodes.NOT_FOUND).json({ message: "Payment not found" });
-  }
-
-  freelancer.totalIncome += amount;
-  freelancer.totalCompletedJobs += 1;
-  freelancer.can_review.push({ user: jobProviderId });
-  await freelancer.save();
-
-  payment.paymentStatus = "Completed";
-  await payment.save();
-
-  jobProvider.totalAmountPaid += amount;
-  if ((jobProvider.totalCompletedJobs + 1) % 5 === 0) {
-    jobProvider.mileStone += 1;
-    jobProvider.totalCompletedJobs += 1;
-  } else {
-    jobProvider.totalCompletedJobs += 1;
-  }
-  jobProvider.can_review.push({ user: freelancerId });
-  await jobProvider.save();
-
-  job.job_status = "can_delete";
-  await job.save();
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
   try {
-  if (freelancer.email) {
-    await sendPaymentVerificationSuccessEmail({
-      email: freelancer.email,
-      job_seeker_name: freelancer.username || "Freelancer",
-      job_name: job.title,
-      job_provider_name: jobProvider.username || "Job Provider",
-      amount: amount,
-    }, res, req);
+    const freelancer = await User.findById(freelancerId).session(session);
+    const jobProvider = await User.findById(jobProviderId).session(session);
+    const job = await Job.findById(jobId).session(session);
+    const payment = await Payment.findById(paymentId).session(session);
+
+    if (!job) {
+      await session.abortTransaction();
+      return res.status(StatusCodes.NOT_FOUND).json({ message: "Job not found" });
+    }
+
+    if (!freelancer || !jobProvider) {
+      await session.abortTransaction();
+      return res.status(StatusCodes.NOT_FOUND).json({ message: "User not found" });
+    }
+
+    if (!payment) {
+      await session.abortTransaction();
+      return res.status(StatusCodes.NOT_FOUND).json({ message: "Payment not found" });
+    }
+
+    // Update freelancer
+    freelancer.totalIncome += amount;
+    freelancer.totalCompletedJobs += 1;
+    freelancer.can_review.push({ user: jobProviderId });
+    await freelancer.save({ session });
+
+    // Update payment
+    payment.paymentStatus = "Completed";
+    await payment.save({ session });
+
+    // Update job provider
+    jobProvider.totalAmountPaid += amount;
+    if ((jobProvider.totalCompletedJobs + 1) % 5 === 0) {
+      jobProvider.mileStone += 1;
+    }
+    jobProvider.totalCompletedJobs += 1;
+    jobProvider.can_review.push({ user: freelancerId });
+    await jobProvider.save({ session });
+
+    // Update job
+    job.job_status = "can_delete";
+    await job.save({ session }) ;
+
+    //Commit transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    //  Send emails (after commit to avoid rollback issues)
+    try {
+      if (freelancer.email) {
+        await sendPaymentVerificationSuccessEmail(
+          {
+            email: freelancer.email,
+            job_seeker_name: freelancer.username || "Freelancer",
+            job_name: job.title,
+            job_provider_name: jobProvider.username || "Job Provider",
+            amount: amount,
+          },
+          res,
+          req
+        );
+      }
+
+      if (jobProvider.email) {
+        await sendPaymentTransparencyAppreciationEmail(
+          {
+            email: jobProvider.email,
+            job_provider_name: jobProvider.username || "Job Provider",
+            job_seeker_name: freelancer.username || "Freelancer",
+            job_name: job.title,
+            amount: amount,
+            milestone_achieved: jobProvider.mileStone,
+          },
+          res,
+          req
+        );
+      }
+    } catch (emailError) {
+      logger.error("Failed to send payment completion emails", {
+        error: emailError.message,
+        paymentId,
+        requestId: req.requestId,
+      });
+    }
+
+    logger.info("Payment completed successfully", {
+      adminId: req.user._id,
+      paymentId,
+      freelancerId,
+      jobProviderId,
+      amount,
+      jobId,
+      requestId: req.requestId,
+    });
+
+    res.status(StatusCodes.OK).json({ message: "Payment completed successfully" });
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+
+    logger.error("Transaction failed during payment completion", {
+      error: err.message,
+      paymentId,
+      requestId: req.requestId,
+    });
+
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: "Payment processing failed. Please try again.",
+    });
   }
-
-  // Email to Job Provider
-  if (jobProvider.email) {
-    await sendPaymentTransparencyAppreciationEmail({
-      email: jobProvider.email,
-      job_provider_name: jobProvider.username || "Job Provider",
-      job_seeker_name: freelancer.username || "Freelancer",
-      job_name: job.title,
-      amount: amount,
-      milestone_achieved: jobProvider.mileStone 
-    }, res, req);
-  }
-} catch (emailError) {
-  logger.error('Failed to send payment completion emails', {
-    error: emailError.message,
-    paymentId,
-    requestId: req.requestId
-  });
-}
-
-  logger.info('Payment completed successfully', {
-    adminId: req.user._id,
-    paymentId,
-    freelancerId,
-    jobProviderId,
-    amount,
-    jobId,
-    requestId: req.requestId
-  });
-
-  res.status(200).json({ message: "Payment completed successfully" });
 });
+
 
 //verfiy document
 export const verifyDocument = catchAsync(async (req, res) => {

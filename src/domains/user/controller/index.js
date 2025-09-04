@@ -764,40 +764,74 @@ export const getAllJobSeekers = catchAsync(async (req, res) => {
 /**
  * @function nearByJobSeekers
  * @param req - The request object containing user data for getting nearby job seekers.
- * * @param res - The response object to send the response back to the client.
- * * @description - This function handles getting nearby job seekers by validating the input data, checking for existing users, and returning the user data.
- * * @returns - A JSON response containing the nearby job seekers.
- * * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
+ * @param res - The response object to send the response back to the client.
+ * @description - This function handles getting nearby job seekers by validating the input data, checking for existing users, and returning the user data with pagination.
+ * @returns - A JSON response containing the nearby job seekers.
+ * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
  */
 export const nearByJobSeekers = catchAsync(async (req, res) => {
-  try {
-    const { latitude, longitude } = req.params;
+  const { latitude, longitude } = req.params;
+  const { page = 1, limit = 10 } = req.query;
 
-    const nearBy = await User.aggregate([
-      {
-        $geoNear: {
-          near: {
-            type: "Point",
-            coordinates: [parseFloat(longitude), parseFloat(latitude)],
-          },
-          distanceField: "dist.calculated",
-          maxDistance: parseFloat(10000),
-          spherical: true,
-        },
-      },
-      {
-        $match: {
-          role: "job_seeker",
-        },
-      },
-    ]).project("-password -documents");
-
-    res.status(200).json({ nearBy });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get nearby jobseekers" });
+  if (!latitude || !longitude) {
+    return res.status(StatusCodes.BAD_REQUEST).json({
+      success: false,
+      message: "Latitude and longitude are required",
+    });
   }
+
+  const lat = parseFloat(latitude);
+  const lng = parseFloat(longitude);
+  const pageNum = Math.max(1, parseInt(page, 10));
+  const limitNum = Math.max(1, parseInt(limit, 10));
+  const skip = (pageNum - 1) * limitNum;
+
+  const countPipeline = [
+    {
+      $geoNear: {
+        near: { type: "Point", coordinates: [lng, lat] },
+        distanceField: "dist.calculated",
+        maxDistance: parseFloat(10000), // 10 km
+        spherical: true,
+      },
+    },
+    { $match: { role: "job_seeker" } },
+    { $count: "total" },
+  ];
+
+  const countResult = await User.aggregate(countPipeline);
+  const totalJobSeekers = countResult.length > 0 ? countResult[0].total : 0;
+  const totalPages = Math.ceil(totalJobSeekers / limitNum);
+
+  const seekers = await User.aggregate([
+    {
+      $geoNear: {
+        near: { type: "Point", coordinates: [lng, lat] },
+        distanceField: "dist.calculated",
+        maxDistance: parseFloat(10000),
+        spherical: true,
+      },
+    },
+    { $match: { role: "job_seeker" } },
+    { $project: { password: 0, documents: 0 } }, 
+    { $skip: skip },
+    { $limit: limitNum },
+  ]);
+
+  res.status(StatusCodes.OK).json({
+    success: true,
+    pagination: {
+      currentPage: pageNum,
+      totalPages,
+      totalJobSeekers,
+      hasNextPage: pageNum < totalPages,
+      hasPrevPage: pageNum > 1,
+      limit: limitNum,
+    },
+    data: seekers,
+  });
 });
+
 
 
 /**
@@ -842,7 +876,6 @@ export const nearByjobProviders = catchAsync(async (req, res) => {
   const totalJobProviders = countResult.length > 0 ? countResult[0].total : 0;
   const totalPages = Math.ceil(totalJobProviders / limitNum);
 
-  // Main query with pagination
   const providers = await User.aggregate([
     {
       $geoNear: {
@@ -1030,11 +1063,20 @@ export const getSavedJobs = catchAsync(async (req, res) => {
  * @function getTopRatedJobProviders
  * @param req - The request object containing user data for getting top-rated job providers.
  * @param res - The response object to send the response back to the client.
- * @description - This function handles getting top-rated job providers by validating the input data, checking for existing users, and returning the top-rated job providers.
- * @returns - A JSON response containing the top-rated job providers.
+ * @description - This function handles getting top-rated job providers with pagination (10 per page).
+ * @returns - A JSON response containing the top-rated job providers with pagination info.
  * @throws - If an error occurs during the process, it sends a 422 status code with an error message.
  */
 export const getTopRatedJobProviders = catchAsync(async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = 10;
+  const skip = (page - 1) * limit;
+
+  const totalJobProviders = await User.countDocuments({
+    role: "job_provider",
+    isDocumentVerified: "verified",
+  });
+
   const topRatedJobProviders = await User.aggregate([
     {
       $match: {
@@ -1052,9 +1094,7 @@ export const getTopRatedJobProviders = catchAsync(async (req, res) => {
     },
     {
       $addFields: {
-        averageRating: {
-          $avg: "$reviews.rating",
-        },
+        averageRating: { $avg: "$reviews.rating" },
       },
     },
     {
@@ -1062,6 +1102,8 @@ export const getTopRatedJobProviders = catchAsync(async (req, res) => {
         averageRating: -1,
       },
     },
+    { $skip: skip },
+    { $limit: limit },
     {
       $project: {
         password: 0,
@@ -1071,8 +1113,24 @@ export const getTopRatedJobProviders = catchAsync(async (req, res) => {
     },
   ]);
 
-  res.status(StatusCodes.OK).json(topRatedJobProviders);
+  // Pagination info
+  const totalPages = Math.ceil(totalJobProviders / limit);
+  const hasNextPage = page < totalPages;
+  const hasPrevPage = page > 1;
+
+  res.status(StatusCodes.OK).json({
+    data: topRatedJobProviders,
+    pagination: {
+      currentPage: page,
+      totalPages,
+      totalJobProviders,
+      hasNextPage,
+      hasPrevPage,
+      limit,
+    },
+  });
 });
+
 
 /**
  * @function getTopRatedJobSeeker
