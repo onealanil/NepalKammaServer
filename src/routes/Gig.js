@@ -5,14 +5,13 @@
 import express from "express";
 import { protect, permission } from "../domains/auth/middlewares/auth.js";
 import {
-  createGig,
   deleteSingleGig,
   getGig,
   getSingleGig,
   getSingleUserGigs,
   nearByGig,
   searchGig,
-  uploadImages,
+  createGigWithImages
 } from "../domains/gigs/controller/index.js";
 import {
   createGigValidation,
@@ -23,32 +22,51 @@ import { normalLimiter } from "../services/normalRoutes.js";
 const router = express.Router();
 
 /**
- * @description This route is used to create a gig.
- * @route POST /api/v1/gig/creategig/:id
+ * @description This route creates a gig with images in one atomic request
+ * @route POST /api/v1/gig
  * @access Private
  * @permission job_seeker
- * @param {string} id - The ID of the user creating the gig.
  */
 router
-  .route("/creategig/:id")
-  .put(
+  .route("/")
+  .post(
     normalLimiter,
     protect,
+    multipleUpload,
     permission(["job_seeker"]),
     createGigValidation,
     createGigValidationResult,
-    createGig
+    createGigWithImages
   );
 
-/**
- * @description This route is used to upload images for a gig.
- * @route POST /api/v1/gig/upload-photo
- * @access Private
- * @permission job_seeker
- */
-router
-  .route("/upload-photo")
-  .post(normalLimiter, protect, multipleUpload, permission(["job_seeker"]), uploadImages);
+
+// /**
+//  * @description This route is used to create a gig.
+//  * @route POST /api/v1/gig/creategig/:id
+//  * @access Private
+//  * @permission job_seeker
+//  * @param {string} id - The ID of the user creating the gig.
+//  */
+// router
+//   .route("/creategig/:id")
+//   .put(
+//     normalLimiter,
+//     protect,
+//     permission(["job_seeker"]),
+//     createGigValidation,
+//     createGigValidationResult,
+//     createGig
+//   );
+
+// /**
+//  * @description This route is used to upload images for a gig.
+//  * @route POST /api/v1/gig/upload-photo
+//  * @access Private
+//  * @permission job_seeker
+//  */
+// router
+//   .route("/upload-photo")
+//   .post(normalLimiter, protect, multipleUpload, permission(["job_seeker"]), uploadImages);
 /**
  * @description This route is used to get nearby gigs based on latitude and longitude.
  * @route GET /api/v1/gig/getNearbyGig/:latitude/:longitude

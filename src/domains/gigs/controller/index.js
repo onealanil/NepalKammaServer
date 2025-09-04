@@ -18,104 +18,223 @@ import cloudinary from "cloudinary";
 import { getOrSetCache, clearCache } from "../../../utils/cacheService.js";
 import { StatusCodes } from "http-status-codes";
 import logger from "../../../utils/logger.js";
+import mongoose from "mongoose";
+
 /**
- * @function uploadImages
- * @description Upload images to Cloudinary and save the image data to the database.
- * @param {Object} req - The request object containing the files to be uploaded.
- * @param {Object} res - The response object to send the response.
- * @returns - A JSON response with a success message and the image data.
- * @throws - If an error occurs during the upload process, a JSON response with an error message is sent.
+ * @function createGigWithImages
+ * @description Upload gig images to Cloudinary and create a gig atomically.
+ * @param {Object} req - The request object containing files and gig data.
+ * @param {Object} res - The response object.
+ * @returns - JSON response with the created gig.
+ * @throws - Returns error JSON response if any step fails.
  * @async
  */
-export const uploadImages = catchAsync(async (req, res) => {
-  const files = getDataUris(req.files);
-
-  logger.info('Gig image upload started', {
-    fileCount: files.length,
-    userId: req.user._id,
-    requestId: req.requestId
-  });
-
-  const images = [];
-  for (let i = 0; i < files.length; i++) {
-    const fileData = files[i];
-    const cdb = await cloudinary.v2.uploader.upload(fileData, {});
-    images.push({
-      public_id: cdb.public_id,
-      url: cdb.secure_url,
-    });
+export const createGigWithImages = catchAsync(async (req, res) => {
+  console.log("This is the data:");
+  console.log(req.files, req.body);
+  if (!req.files || req.files.length === 0) {
+    return res.status(StatusCodes.BAD_REQUEST).json({ message: "No files uploaded" });
   }
 
-  const imagesData = new Gig({
-    images: images,
-  });
+  if (req.files.length > 2) {
+    return res.status(StatusCodes.BAD_REQUEST).json({ message: "Maximum 2 images allowed" });
+  }
 
-  await imagesData.save();
-
-  logger.info('Gig images uploaded successfully', {
-    gigId: imagesData._id,
-    imageCount: images.length,
-    userId: req.user._id,
-    requestId: req.requestId
-  });
-
-  res.status(StatusCodes.CREATED).json({ message: "Successfully! uploaded", imagesData });
-});
-
-/**
- * @function createGig
- * @description Create a new gig and save it to the database.
- * @param {Object} req - The request object containing the gig data.
- * @param {Object} res - The response object to send the response.
- * @returns - A JSON response with a success message and the created gig data.
- * @throws - If an error occurs during the creation process, a JSON response with an error message is sent.
- * @async
- */
-export const createGig = catchAsync(async (req, res) => {
-  const gig_id = req.params.id;
-  const gig = await Gig.findById(gig_id);
-
-  if (!gig) {
-    logger.warn('Gig not found', { gigId: gig_id, userId: req.user._id, requestId: req.requestId });
-    return res.status(StatusCodes.NOT_FOUND).json({ message: "Gig not found" });
+  const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+  for (const file of req.files) {
+    if (!allowedTypes.includes(file.mimetype)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({ message: "Invalid file type" });
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      return res.status(StatusCodes.BAD_REQUEST).json({ message: "File too large (max 5MB)" });
+    }
   }
 
   const { title, gig_description, price, category } = req.body;
+  if (!title || !gig_description || !price || !category) {
+    return res.status(StatusCodes.BAD_REQUEST).json({ message: "Missing required fields" });
+  }
 
-  logger.info('Gig update started', {
-    gigId: gig_id,
-    title,
-    category,
-    userId: req.user._id,
-    requestId: req.requestId
-  });
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  const gigData = await Gig.findByIdAndUpdate(
-    gig_id,
-    {
+  let uploadResults = [];
+  try {
+    logger.info("Gig creation started", {
+      userId: req.user._id,
+      requestId: req.requestId,
+      fileCount: req.files.length,
+    });
+
+    const files = getDataUris(req.files);
+
+    logger.info('Gig image upload started', {
+      fileCount: files.length,
+      userId: req.user._id,
+      requestId: req.requestId
+    });
+
+    const images = [];
+    for (let i = 0; i < files.length; i++) {
+      const fileData = files[i];
+      const cdb = await cloudinary.v2.uploader.upload(fileData, {});
+      images.push({
+        public_id: cdb.public_id,
+        url: cdb.secure_url,
+      });
+    }
+
+    const gig = new Gig({
       title,
       gig_description,
       price,
       category,
       postedBy: req.user._id,
-    },
-    { new: true }
-  );
+      images,
+    });
 
-  // Clear relevant caches after creating/updating a gig
-  clearCache([
-    'gigs_all_1_10', // First page of all gigs
-    `user_gigs_${req.user._id}`, // User's gigs
-  ]);
+    await gig.save({ session });
 
-  logger.info('Gig updated successfully', {
-    gigId: gigData._id,
-    userId: req.user._id,
-    requestId: req.requestId
-  });
+    await session.commitTransaction();
+    session.endSession();
 
-  res.status(StatusCodes.CREATED).json({ status: "success", message: "Successfully! created", gigData });
+    clearCache([
+      "gigs_all_1_10",
+      `user_gigs_${req.user._id}`,
+    ]);
+
+    logger.info("Gig created successfully", {
+      gigId: gig._id,
+      userId: req.user._id,
+      imageCount: images.length,
+      requestId: req.requestId,
+    });
+
+    return res.status(StatusCodes.CREATED).json({
+      status: "success",
+      message: "Gig created successfully",
+      gig,
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
+    if (uploadResults.length > 0) {
+      await Promise.all(uploadResults.map((r) => cloudinary.v2.uploader.destroy(r.public_id)));
+    }
+
+    logger.error("Gig creation failed", {
+      error: error.message,
+      userId: req.user._id,
+      requestId: req.requestId,
+    });
+
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      status: "error",
+      message: "Failed to create gig, please try again later",
+    });
+  }
 });
+
+
+// /**
+//  * @function uploadImages
+//  * @description Upload images to Cloudinary and save the image data to the database.
+//  * @param {Object} req - The request object containing the files to be uploaded.
+//  * @param {Object} res - The response object to send the response.
+//  * @returns - A JSON response with a success message and the image data.
+//  * @throws - If an error occurs during the upload process, a JSON response with an error message is sent.
+//  * @async
+//  */
+// export const uploadImages = catchAsync(async (req, res) => {
+//   const files = getDataUris(req.files);
+
+//   logger.info('Gig image upload started', {
+//     fileCount: files.length,
+//     userId: req.user._id,
+//     requestId: req.requestId
+//   });
+
+//   const images = [];
+//   for (let i = 0; i < files.length; i++) {
+//     const fileData = files[i];
+//     const cdb = await cloudinary.v2.uploader.upload(fileData, {});
+//     images.push({
+//       public_id: cdb.public_id,
+//       url: cdb.secure_url,
+//     });
+//   }
+
+//   const imagesData = new Gig({
+//     images: images,
+//   });
+
+//   await imagesData.save();
+
+//   logger.info('Gig images uploaded successfully', {
+//     gigId: imagesData._id,
+//     imageCount: images.length,
+//     userId: req.user._id,
+//     requestId: req.requestId
+//   });
+
+//   res.status(StatusCodes.CREATED).json({ message: "Successfully! uploaded", imagesData });
+// });
+
+// /**
+//  * @function createGig
+//  * @description Create a new gig and save it to the database.
+//  * @param {Object} req - The request object containing the gig data.
+//  * @param {Object} res - The response object to send the response.
+//  * @returns - A JSON response with a success message and the created gig data.
+//  * @throws - If an error occurs during the creation process, a JSON response with an error message is sent.
+//  * @async
+//  */
+// export const createGig = catchAsync(async (req, res) => {
+//   const gig_id = req.params.id;
+//   const gig = await Gig.findById(gig_id);
+
+//   if (!gig) {
+//     logger.warn('Gig not found', { gigId: gig_id, userId: req.user._id, requestId: req.requestId });
+//     return res.status(StatusCodes.NOT_FOUND).json({ message: "Gig not found" });
+//   }
+
+//   const { title, gig_description, price, category } = req.body;
+
+//   logger.info('Gig update started', {
+//     gigId: gig_id,
+//     title,
+//     category,
+//     userId: req.user._id,
+//     requestId: req.requestId
+//   });
+
+//   const gigData = await Gig.findByIdAndUpdate(
+//     gig_id,
+//     {
+//       title,
+//       gig_description,
+//       price,
+//       category,
+//       postedBy: req.user._id,
+//     },
+//     { new: true }
+//   );
+
+//   // Clear relevant caches after creating/updating a gig
+//   clearCache([
+//     'gigs_all_1_10', // First page of all gigs
+//     `user_gigs_${req.user._id}`, // User's gigs
+//   ]);
+
+//   logger.info('Gig updated successfully', {
+//     gigId: gigData._id,
+//     userId: req.user._id,
+//     requestId: req.requestId
+//   });
+
+//   res.status(StatusCodes.CREATED).json({ status: "success", message: "Successfully! created", gigData });
+// });
 
 
 /**
@@ -373,25 +492,25 @@ export const deleteSingleGig = catchAsync(async (req, res) => {
     });
     return res.status(403).json({ message: "Unauthorized to delete this gig" });
   }
-    if (gig.images && gig.images.length > 0) {
-      for (const image of gig.images) {
-        await cloudinary.v2.uploader.destroy(image.public_id);
-      }
+  if (gig.images && gig.images.length > 0) {
+    for (const image of gig.images) {
+      await cloudinary.v2.uploader.destroy(image.public_id);
     }
+  }
 
-    await gig.deleteOne();
+  await gig.deleteOne();
 
-    // Clear related caches
-    clearCache([
-      'gigs_all_1_10',
-      `user_gigs_${gig.postedBy}`,
-    ]);
-    logger.info('Gig deleted successfully', {
-      gigId: gig._id,
-      userId: req.user._id,
-      requestId: req.requestId
-    });
-    res.status(200).json({ message: "Gig deleted successfully" });
+  // Clear related caches
+  clearCache([
+    'gigs_all_1_10',
+    `user_gigs_${gig.postedBy}`,
+  ]);
+  logger.info('Gig deleted successfully', {
+    gigId: gig._id,
+    userId: req.user._id,
+    requestId: req.requestId
+  });
+  res.status(200).json({ message: "Gig deleted successfully" });
 
 });
 
@@ -402,41 +521,41 @@ export const deleteSingleGig = catchAsync(async (req, res) => {
  */
 
 export const getSingleGig = catchAsync(async (req, res) => {
-    const { gigId } = req.params;
-    const cacheKey = `single_gig_${gigId}`;
+  const { gigId } = req.params;
+  const cacheKey = `single_gig_${gigId}`;
 
-    const result = await getOrSetCache(cacheKey, async () => {
-      const gig = await Gig.findById(gigId)
-        .populate(
-          "postedBy",
-          "username email profilePic onlineStatus can_review skills address location"
-        )
-        .exec();
+  const result = await getOrSetCache(cacheKey, async () => {
+    const gig = await Gig.findById(gigId)
+      .populate(
+        "postedBy",
+        "username email profilePic onlineStatus can_review skills address location"
+      )
+      .exec();
 
-      if (!gig) {
-        return null;
-      }
-
-      return gig;
-    });
-
-    if (!result) {
-      logger.warn('Gig not found', {
-        gigId,
-        userId: req.user?._id,
-        requestId: req.requestId
-      });
-      return res.status(404).json({ message: "Gig not found" });
+    if (!gig) {
+      return null;
     }
-    logger.info('Gig retrieved successfully', {
+
+    return gig;
+  });
+
+  if (!result) {
+    logger.warn('Gig not found', {
       gigId,
       userId: req.user?._id,
       requestId: req.requestId
     });
-    res.status(200).json({
-      success: true,
-      gig: result,
-    });
+    return res.status(404).json({ message: "Gig not found" });
+  }
+  logger.info('Gig retrieved successfully', {
+    gigId,
+    userId: req.user?._id,
+    requestId: req.requestId
+  });
+  res.status(200).json({
+    success: true,
+    gig: result,
+  });
 });
 
 
