@@ -11,6 +11,7 @@ import { StatusCodes } from "http-status-codes";
 import logger from "../../../utils/logger.js";
 import { sendPaymentTransparencyAppreciationEmail, sendPaymentVerificationSuccessEmail } from "../helper/SendEmailPaymentAdmin.js";
 import mongoose from "mongoose";
+import { sendRejectionEmail } from "../helper/SendRejectionEmail.js";
 
 //count all freelancers, job, gigs, and job_providers
 export const countAll = catchAsync(async (req, res) => {
@@ -292,7 +293,7 @@ export const completedPayment = catchAsync(async (req, res) => {
 
     // Update job
     job.job_status = "can_delete";
-    await job.save({ session }) ;
+    await job.save({ session });
 
     //Commit transaction
     await session.commitTransaction();
@@ -384,14 +385,14 @@ export const verifyDocument = catchAsync(async (req, res) => {
       requestId: req.requestId
     });
 
-    res.status(200).json({ message: "User Successfully verified" });
+    res.status(StatusCodes.OK).json({ message: "User Successfully verified" });
   } catch (error) {
     logger.error('Email sending failed', {
       error: error.message,
       userId,
       requestId: req.requestId
     });
-    return res.status(500).json({ message: "Failed to send verification email" });
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: "Failed to send verification email" });
   }
 
 });
@@ -401,21 +402,31 @@ export const rejectDocument = catchAsync(async (req, res) => {
   const { userId } = req.params;
   const user = await User.findById(userId);
   if (!user) {
-    res.status(200).json({ message: "User not found!" });
+    res.status(StatusCodes.NOT_FOUND).json({ message: "User not found!" });
   }
+  const reason_text = "Provided document is not clear. Please provide a clear and valid document for verification.";
+  try {
+    await sendRejectionEmail({ email: user.email, reason: reason_text }, res, req);
+    user.isDocumentVerified = "is_not_verified";
+    user.documents = [];
+    await user.save();
 
-  user.isDocumentVerified = "is_not_verified";
-  user.documents = [];
-  await user.save();
+    logger.info('User document rejected successfully', {
+      adminId: req.user._id,
+      userId,
+      email: user.email,
+      requestId: req.requestId
+    });
 
-  logger.info('User document rejected successfully', {
-    adminId: req.user._id,
-    userId,
-    email: user.email,
-    requestId: req.requestId
-  });
-
-  res.status(200).json({ message: "User document rejected" });
+    res.status(StatusCodes.OK).json({ message: "User document rejected" });
+  } catch (error) {
+    logger.error('Email sending failed', {
+      error: error.message,
+      userId,
+      requestId: req.requestId
+    });
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: "Failed to send verification email" });
+  }
 });
 
 //get all reports

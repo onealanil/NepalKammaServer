@@ -521,6 +521,12 @@ export const updateProfilePicController = catchAsync(async (req, res) => {
  */
 export const updatePhoneNumber = catchAsync(async (req, res) => {
   const { phone } = req.body;
+  if (!phone) {
+    return res.status(StatusCodes.BAD_REQUEST).send({
+      success: false,
+      message: "Phone number is required",
+    });
+  }
 
   logger.info('Phone number update request', {
     userId: req.user._id,
@@ -584,6 +590,16 @@ export const uploadDocuments = catchAsync(async (req, res) => {
   const files = getDataUris(req.files);
 
   const user = await User.findById(req.user._id);
+  if (!user) {
+    logger.warn('Document upload failed - user not found', {
+      userId: req.user._id,
+      requestId: req.requestId
+    });
+    return res.status(StatusCodes.BAD_REQUEST).send({
+      success: false,
+      message: "User not found, Login again!",
+    });
+  }
 
   const images = [];
   for (let i = 0; i < files.length; i++) {
@@ -612,22 +628,34 @@ export const uploadDocuments = catchAsync(async (req, res) => {
  * * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
  */
 export const getSingleUser = catchAsync(async (req, res) => {
-  try {
-    const userId = req.params.id;
+  const userId = req.params.id;
 
-    // Get user details excluding password
-    const user = await User.findById(userId).select("-password");
-
-    // Get all jobs posted by the user
-    const userJobs = await Job.find({ postedBy: userId, visibility: "public" })
-      .populate("postedBy", "-password -documents -isVerified")
-      .populate("assignedTo", "-password -documents -isVerified ");
-
-    res.status(200).json({ user, userJobs });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get user and their jobs" });
+  if (!userId) {
+    logger.warn('Get single user failed - user ID missing', { requestId: req.requestId });
+    return res.status(StatusCodes.BAD_REQUEST).send({
+      success: false,
+      message: "User ID is required",
+    });
   }
+
+  const user = await User.findById(userId).select("-password");
+
+  if (!user) {
+    logger.warn('Get single user failed - user not found', { userId, requestId: req.requestId });
+    return res.status(StatusCodes.NOT_FOUND).send({
+      success: false,
+      message: "User not found",
+    });
+  }
+
+  // Get all jobs posted by the user
+  const userJobs = await Job.find({ postedBy: userId, visibility: "public" })
+    .populate("postedBy", "-password -documents -isVerified")
+    .populate("assignedTo", "-password -documents -isVerified ")
+    .lean()
+    .exec();
+
+  res.status(200).json({ user, userJobs });
 });
 
 /**
@@ -639,23 +667,29 @@ export const getSingleUser = catchAsync(async (req, res) => {
  * * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
  */
 export const getSingleUserProvider = catchAsync(async (req, res) => {
-  try {
-    const userId = req.params.id;
-
-    // Get user details excluding password
-    const user = await User.findById(userId).select("-password -security_answer -documents");
-
-    // Get only public jobs posted by the user
-    const userJobs = await Job.find({
-      postedBy: userId,
-      visibility: "public"
-    })
-
-    res.status(200).json({ user, userJobs });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get user and their jobs" });
+  const userId = req.params.id;
+  if (!userId) {
+    logger.warn('Get single job provider failed - user ID missing', { requestId: req.requestId });
+    return res.status(StatusCodes.BAD_REQUEST).send({
+      success: false,
+      message: "User ID is required",
+    });
   }
+  const user = await User.findById(userId).select("-password -security_answer -documents");
+
+  if (!user) {
+    logger.warn('Get single job provider failed - user not found', { userId, requestId: req.requestId });
+    return res.status(StatusCodes.NOT_FOUND).send({
+      success: false,
+      message: "User not found",
+    });
+  }
+  const userJobs = await Job.find({
+    postedBy: userId,
+    visibility: "public"
+  }).lean().exec();
+
+  res.status(StatusCodes.OK).json({ user, userJobs });
 });
 
 /**
@@ -667,22 +701,32 @@ export const getSingleUserProvider = catchAsync(async (req, res) => {
  * * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
  */
 export const getSingleUserSeeker = catchAsync(async (req, res) => {
-  try {
-    const userId = req.params.id;
+  const userId = req.params.id;
 
-    // Get user details excluding password
-    const user = await User.findById(userId).select("-password -security_answer -documents");
-
-    // Get only public gigs posted by the user
-    const userGigs = await Gig.find({
-      postedBy: userId,
-    })
-
-    res.status(200).json({ user, userGigs });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get user and their gigs" });
+  if (!userId) {
+    logger.warn('Get single job seeker failed - user ID missing', { requestId: req.requestId });
+    return res.status(StatusCodes.BAD_REQUEST).send({
+      success: false,
+      message: "User ID is required",
+    });
   }
+
+  // Get user details excluding password
+  const user = await User.findById(userId).select("-password -security_answer -documents");
+  if (!user) {
+    logger.warn('Get single job seeker failed - user not found', { userId, requestId: req.requestId });
+    return res.status(StatusCodes.NOT_FOUND).send({
+      success: false,
+      message: "User not found",
+    });
+  }
+
+  // Get only public gigs posted by the user
+  const userGigs = await Gig.find({
+    postedBy: userId,
+  })
+
+  res.status(StatusCodes.OK).json({ user, userGigs });
 });
 
 // get all users who are job seekers
@@ -720,45 +764,37 @@ export const getSingleUserSeeker = catchAsync(async (req, res) => {
  * * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
  */
 export const getAllJobSeekers = catchAsync(async (req, res) => {
-  try {
-    const searchQuery = req.query.search;
-    let query = { role: "job_seeker" };
+  const searchQuery = req.query.search;
+  let query = { role: "job_seeker" };
 
-    if (searchQuery) {
-      query.$or = [
-        { username: { $regex: searchQuery, $options: "i" } },
-        { email: { $regex: searchQuery, $options: "i" } },
-      ];
-    }
-
-    let users;
-
-    if (!searchQuery) {
-      // If no search query, sort users by popularity
-      const allUsers = await User.find(query).select("-password -documents");
-
-      // Calculate popularity based on average ratings
-      for (const user of allUsers) {
-        const reviews = await Review.find({ reviewedTo: user._id });
-        const totalRating = reviews.reduce((acc, item) => acc + item.rating, 0);
-        user.avgRating = totalRating / (reviews.length || 1); // Store average rating directly in the user document
-      }
-
-      users = allUsers.sort((a, b) => b.avgRating - a.avgRating);
-    } else {
-      // If search query is provided, simply find users based on query
-      users = await User.find(query).select("-password -documents");
-    }
-
-    if (users.length === 0) {
-      return res.status(200).json({ message: "No users found" });
-    }
-
-    res.status(200).json({ users });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to get job seekers" });
+  if (searchQuery) {
+    query.$or = [
+      { username: { $regex: searchQuery, $options: "i" } },
+      { email: { $regex: searchQuery, $options: "i" } },
+    ];
   }
+
+  let users;
+
+  if (!searchQuery) {
+    const allUsers = await User.find(query).select("-password -documents");
+
+    for (const user of allUsers) {
+      const reviews = await Review.find({ reviewedTo: user._id });
+      const totalRating = reviews.reduce((acc, item) => acc + item.rating, 0);
+      user.avgRating = totalRating / (reviews.length || 1); // Store average rating directly in the user document
+    }
+
+    users = allUsers.sort((a, b) => b.avgRating - a.avgRating);
+  } else {
+    users = await User.find(query).select("-password -documents");
+  }
+
+  if (users.length === 0) {
+    return res.status(StatusCodes.NOT_FOUND).json({ message: "No users found" });
+  }
+
+  res.status(StatusCodes.OK).json({ users });
 });
 
 /**
@@ -813,7 +849,7 @@ export const nearByJobSeekers = catchAsync(async (req, res) => {
       },
     },
     { $match: { role: "job_seeker" } },
-    { $project: { password: 0, documents: 0 } }, 
+    { $project: { password: 0, documents: 0 } },
     { $skip: skip },
     { $limit: limitNum },
   ]);
@@ -916,14 +952,25 @@ export const nearByjobProviders = catchAsync(async (req, res) => {
  */
 export const searchUser = catchAsync(async (req, res) => {
   const { username } = req.params;
+  if (!username) {
+    logger.warn('Username is required for searching users', { requestId: req.requestId });
+    return res.status(StatusCodes.BAD_REQUEST).json({
+      success: false,
+      message: "Username is required",
+    });
+  }
 
   const user = await User.find({
     username: { $regex: new RegExp(`^${username}$`, "i") },
     role: "job_seeker",
   }).select("-password -documents -security_answer");
 
-  res.status(StatusCodes.OK).json({ user });
+  if (user.length === 0) {
+    logger.warn('No users found matching the search query', { username, requestId: req.requestId });
+    return res.status(StatusCodes.NOT_FOUND).json({ message: "No users found" });
+  }
 
+  res.status(StatusCodes.OK).json({ user });
 });
 
 /**
@@ -935,25 +982,23 @@ export const searchUser = catchAsync(async (req, res) => {
  * @throws - If an error occurs during the process, it sends a 500 status code with an error message.
  */
 export const countAll = catchAsync(async (req, res) => {
-  try {
-    const { jobProviderId } = req.params;
-    const jobProvider = await User.findById(jobProviderId);
-    if (!jobProvider) {
-      return res.status(404).json({ message: "Job provider not found" });
-    }
-    const totalJobsbyProvider = await Job.countDocuments({
-      postedBy: jobProviderId,
-    });
-    const InprogressJobs = await Job.countDocuments({
-      postedBy: jobProviderId,
-      job_status: "In_Progress",
-    });
-
-    res.status(200).json({ totalJobsbyProvider, InprogressJobs });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to count all" });
+  const { jobProviderId } = req.params;
+  if (!jobProviderId) {
+    return res.status(400).json({ message: "Job provider ID is required" });
   }
+  const jobProvider = await User.findById(jobProviderId);
+  if (!jobProvider) {
+    return res.status(404).json({ message: "Job provider not found" });
+  }
+  const totalJobsbyProvider = await Job.countDocuments({
+    postedBy: jobProviderId,
+  });
+  const InprogressJobs = await Job.countDocuments({
+    postedBy: jobProviderId,
+    job_status: "In_Progress",
+  });
+
+  res.status(200).json({ totalJobsbyProvider, InprogressJobs });
 });
 
 /**
@@ -965,33 +1010,37 @@ export const countAll = catchAsync(async (req, res) => {
  * @throws - If an error occurs during the process, it sends a 422 status code with an error message.
  */
 export const saveJob = catchAsync(async (req, res) => {
-  try {
-    const postId = req.params.id;
-    const myId = req.user._id;
+  const postId = req.params.id;
+  const myId = req.user._id;
 
-    const currentUser = await User.findById(myId).select(
-      "-password -isVerified -email"
-    );
+  if (!postId) {
+    return res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({ message: "Post ID is required" });
+  }
 
-    if (currentUser.savedPostJob.includes(postId)) {
-      res.status(422).json({ message: "This post is already saved" });
-    }
+  if (!myId) {
+    return res.status(StatusCodes.UNAUTHORIZED).json({ message: "Unauthorized" });
+  }
 
-    const postStatus = await Job.findById(postId);
-    if (postStatus.visibility === "private") {
-      res.status(422).json({ message: "This post is private" });
-    }
+  const currentUser = await User.findById(myId).select(
+    "-password -isVerified -email"
+  );
 
-    if (!currentUser.savedPostJob.includes(postId)) {
-      const response = await User.findByIdAndUpdate(
-        myId,
-        { $addToSet: { savedPostJob: postId } },
-        { new: true }
-      ).select("-password -isVerified -email");
-      res.status(200).json({ message: "Job successfully saved! " });
-    }
-  } catch (err) {
-    res.status(422).json({ message: err.message });
+  if (currentUser.savedPostJob.includes(postId)) {
+    return res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({ message: "This post is already saved" });
+  }
+
+  const postStatus = await Job.findById(postId);
+  if (postStatus.visibility === "private") {
+    return res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({ message: "This post is private" });
+  }
+
+  if (!currentUser.savedPostJob.includes(postId)) {
+    await User.findByIdAndUpdate(
+      myId,
+      { $addToSet: { savedPostJob: postId } },
+      { new: true }
+    ).select("-password -isVerified -email");
+    res.status(StatusCodes.OK).json({ message: "Job successfully saved! " });
   }
 });
 
@@ -1004,26 +1053,33 @@ export const saveJob = catchAsync(async (req, res) => {
  * @throws - If an error occurs during the process, it sends a 422 status code with an error message.
  */
 export const unsaveJob = catchAsync(async (req, res) => {
-  try {
-    const postId = req.params.id;
-    const myId = req.user._id;
+  const postId = req.params.id;
+  const myId = req.user._id;
+  if (!postId) {
+    return res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({ message: "Post ID is required" });
+  }
 
-    const currentUser = await User.findById(myId).select(
-      "-password -isVerified -email"
-    );
+  if (!myId) {
+    return res.status(StatusCodes.UNAUTHORIZED).json({ message: "Unauthorized" });
+  }
 
-    if (!currentUser.savedPostJob.includes(postId)) {
-      res.status(422).json({ message: "This post is not saved" });
-    } else {
-      const response = await User.findByIdAndUpdate(
-        myId,
-        { $pull: { savedPostJob: postId } },
-        { new: true }
-      ).select("-password -isVerified -email");
-      res.status(200).json({ message: "Job removed from saved list" });
-    }
-  } catch (err) {
-    res.status(422).json({ message: err.message });
+  const currentUser = await User.findById(myId).select(
+    "-password -isVerified -email"
+  );
+
+  if (!currentUser) {
+    return res.status(StatusCodes.UNAUTHORIZED).json({ message: "Unauthorized" });
+  }
+
+  if (!currentUser.savedPostJob.includes(postId)) {
+    res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({ message: "This post is not saved" });
+  } else {
+    await User.findByIdAndUpdate(
+      myId,
+      { $pull: { savedPostJob: postId } },
+      { new: true }
+    ).select("-password -isVerified -email");
+    res.status(StatusCodes.OK).json({ message: "Job removed from saved list" });
   }
 });
 
@@ -1036,27 +1092,27 @@ export const unsaveJob = catchAsync(async (req, res) => {
  * @throws - If an error occurs during the process, it sends a 422 status code with an error message.
  */
 export const getSavedJobs = catchAsync(async (req, res) => {
-  try {
-    const myId = req.user._id;
-    const currentUser = await User.findById(myId)
-      .populate({
-        path: "savedPostJob",
-        options: { sort: { createdAt: -1 } },
-        populate: {
-          path: "postedBy",
-          model: "User",
-        },
-      })
-      .exec();
-
-    const visibleSavedJobs = currentUser.savedPostJob.filter(
-      (job) => job.visibility === "public"
-    );
-
-    res.status(200).json({ savedPosts: visibleSavedJobs });
-  } catch (err) {
-    res.status(422).json({ message: err.message });
+  const myId = req.user._id;
+  if (!myId) {
+    return res.status(StatusCodes.UNAUTHORIZED).json({ message: "Unauthorized" });
   }
+  const currentUser = await User.findById(myId)
+    .populate({
+      path: "savedPostJob",
+      options: { sort: { createdAt: -1 } },
+      populate: {
+        path: "postedBy",
+        model: "User",
+      },
+    })
+    .lean()
+    .exec();
+
+  const visibleSavedJobs = currentUser.savedPostJob.filter(
+    (job) => job.visibility === "public"
+  );
+
+  res.status(StatusCodes.OK).json({ savedPosts: visibleSavedJobs });
 });
 
 /**
