@@ -30,8 +30,6 @@ import mongoose from "mongoose";
  * @async
  */
 export const createGigWithImages = catchAsync(async (req, res) => {
-  console.log("This is the data:");
-  console.log(req.files, req.body);
   if (!req.files || req.files.length === 0) {
     return res.status(StatusCodes.BAD_REQUEST).json({ message: "No files uploaded" });
   }
@@ -39,6 +37,33 @@ export const createGigWithImages = catchAsync(async (req, res) => {
   if (req.files.length > 2) {
     return res.status(StatusCodes.BAD_REQUEST).json({ message: "Maximum 2 images allowed" });
   }
+
+  const userGigCount = await Gig.countDocuments({
+    postedBy: req.user._id,
+    })
+
+  /**
+   * limit user to create maximum 2 jobs
+   */
+
+  const MAX_GIG_PER_USER = 2;
+
+     if (userGigCount >= MAX_GIG_PER_USER) {
+      logger.warn('Gig creation limit exceeded', {
+        userId: req.user._id,
+        currentGigs: userGigCount,
+        limit: MAX_GIG_PER_USER,
+        requestId: req.requestId
+      });
+
+      return res.status(StatusCodes.TOO_MANY_REQUESTS).json({
+        message: `You cannot create more than ${MAX_GIG_PER_USER} gigs.`,
+        solution: "Please complete or delete some of your existing gigs before creating new ones.",
+        currentJobs: userGigCount,
+        maxAllowed: MAX_GIG_PER_USER,
+      });
+    }
+
 
   const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
   for (const file of req.files) {
