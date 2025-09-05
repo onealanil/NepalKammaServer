@@ -335,6 +335,9 @@ export const getSingleUserJobs = catchAsync(async (req, res) => {
 export const nearBy = catchAsync(async (req, res) => {
   const { latitude, longitude } = req.params;
 
+  if (!latitude || !longitude) {
+    return res.status(StatusCodes.BAD_REQUEST).json({ message: "Latitude and Longitude are required" });
+  }
 
   const gridLat = Math.floor(latitude * 10) / 10;
   const gridLng = Math.floor(longitude * 10) / 10;

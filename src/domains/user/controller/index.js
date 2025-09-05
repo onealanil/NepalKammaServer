@@ -32,6 +32,7 @@ import Review from "../../../../models/Review.js";
 import { generateAccessToken, generateRefreshToken } from "../../../utils/jwt.js";
 import { StatusCodes } from "http-status-codes";
 import logger from "../../../utils/logger.js";
+import { clearCache } from "../../../utils/cacheService.js";
 
 /**
  * @function createUser
@@ -456,6 +457,9 @@ export const editProfile = catchAsync(async (req, res) => {
   );
 
   const { password, ...userWithoutPassword } = user.toObject();
+
+  const cacheKey = `recommendations_${id}`;
+  clearCache([cacheKey]);
 
   logger.info('Profile updated successfully', {
     userId: id,

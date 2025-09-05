@@ -15,7 +15,7 @@ import User from "../../../../models/User.js";
 import { getDataUris } from "../../../utils/Features.js";
 import catchAsync from "../../../utils/catchAsync.js";
 import cloudinary from "cloudinary";
-import { getOrSetCache, clearCache } from "../../../utils/cacheService.js";
+import { getOrSetCache, clearCache, clearNearbyGigCacheGrid } from "../../../utils/cacheService.js";
 import { StatusCodes } from "http-status-codes";
 import logger from "../../../utils/logger.js";
 import mongoose from "mongoose";
@@ -40,7 +40,7 @@ export const createGigWithImages = catchAsync(async (req, res) => {
 
   const userGigCount = await Gig.countDocuments({
     postedBy: req.user._id,
-    })
+  })
 
   /**
    * limit user to create maximum 2 jobs
@@ -48,21 +48,21 @@ export const createGigWithImages = catchAsync(async (req, res) => {
 
   const MAX_GIG_PER_USER = 2;
 
-     if (userGigCount >= MAX_GIG_PER_USER) {
-      logger.warn('Gig creation limit exceeded', {
-        userId: req.user._id,
-        currentGigs: userGigCount,
-        limit: MAX_GIG_PER_USER,
-        requestId: req.requestId
-      });
+  if (userGigCount >= MAX_GIG_PER_USER) {
+    logger.warn('Gig creation limit exceeded', {
+      userId: req.user._id,
+      currentGigs: userGigCount,
+      limit: MAX_GIG_PER_USER,
+      requestId: req.requestId
+    });
 
-      return res.status(StatusCodes.TOO_MANY_REQUESTS).json({
-        message: `You cannot create more than ${MAX_GIG_PER_USER} gigs.`,
-        solution: "Please complete or delete some of your existing gigs before creating new ones.",
-        currentJobs: userGigCount,
-        maxAllowed: MAX_GIG_PER_USER,
-      });
-    }
+    return res.status(StatusCodes.TOO_MANY_REQUESTS).json({
+      message: `You cannot create more than ${MAX_GIG_PER_USER} gigs.`,
+      solution: "Please complete or delete some of your existing gigs before creating new ones.",
+      currentJobs: userGigCount,
+      maxAllowed: MAX_GIG_PER_USER,
+    });
+  }
 
 
   const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
@@ -123,10 +123,15 @@ export const createGigWithImages = catchAsync(async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
+    const gridLat = Math.floor(req.user.address.coordinates[1] * 10) / 10;
+    const gridLng = Math.floor(req.user.address.coordinates[0] * 10) / 10;
+
     clearCache([
       "gigs_all_1_10",
       `user_gigs_${req.user._id}`,
     ]);
+
+    clearNearbyGigCacheGrid(gridLat, gridLng);
 
     logger.info("Gig created successfully", {
       gigId: gig._id,
@@ -160,107 +165,6 @@ export const createGigWithImages = catchAsync(async (req, res) => {
     });
   }
 });
-
-
-// /**
-//  * @function uploadImages
-//  * @description Upload images to Cloudinary and save the image data to the database.
-//  * @param {Object} req - The request object containing the files to be uploaded.
-//  * @param {Object} res - The response object to send the response.
-//  * @returns - A JSON response with a success message and the image data.
-//  * @throws - If an error occurs during the upload process, a JSON response with an error message is sent.
-//  * @async
-//  */
-// export const uploadImages = catchAsync(async (req, res) => {
-//   const files = getDataUris(req.files);
-
-//   logger.info('Gig image upload started', {
-//     fileCount: files.length,
-//     userId: req.user._id,
-//     requestId: req.requestId
-//   });
-
-//   const images = [];
-//   for (let i = 0; i < files.length; i++) {
-//     const fileData = files[i];
-//     const cdb = await cloudinary.v2.uploader.upload(fileData, {});
-//     images.push({
-//       public_id: cdb.public_id,
-//       url: cdb.secure_url,
-//     });
-//   }
-
-//   const imagesData = new Gig({
-//     images: images,
-//   });
-
-//   await imagesData.save();
-
-//   logger.info('Gig images uploaded successfully', {
-//     gigId: imagesData._id,
-//     imageCount: images.length,
-//     userId: req.user._id,
-//     requestId: req.requestId
-//   });
-
-//   res.status(StatusCodes.CREATED).json({ message: "Successfully! uploaded", imagesData });
-// });
-
-// /**
-//  * @function createGig
-//  * @description Create a new gig and save it to the database.
-//  * @param {Object} req - The request object containing the gig data.
-//  * @param {Object} res - The response object to send the response.
-//  * @returns - A JSON response with a success message and the created gig data.
-//  * @throws - If an error occurs during the creation process, a JSON response with an error message is sent.
-//  * @async
-//  */
-// export const createGig = catchAsync(async (req, res) => {
-//   const gig_id = req.params.id;
-//   const gig = await Gig.findById(gig_id);
-
-//   if (!gig) {
-//     logger.warn('Gig not found', { gigId: gig_id, userId: req.user._id, requestId: req.requestId });
-//     return res.status(StatusCodes.NOT_FOUND).json({ message: "Gig not found" });
-//   }
-
-//   const { title, gig_description, price, category } = req.body;
-
-//   logger.info('Gig update started', {
-//     gigId: gig_id,
-//     title,
-//     category,
-//     userId: req.user._id,
-//     requestId: req.requestId
-//   });
-
-//   const gigData = await Gig.findByIdAndUpdate(
-//     gig_id,
-//     {
-//       title,
-//       gig_description,
-//       price,
-//       category,
-//       postedBy: req.user._id,
-//     },
-//     { new: true }
-//   );
-
-//   // Clear relevant caches after creating/updating a gig
-//   clearCache([
-//     'gigs_all_1_10', // First page of all gigs
-//     `user_gigs_${req.user._id}`, // User's gigs
-//   ]);
-
-//   logger.info('Gig updated successfully', {
-//     gigId: gigData._id,
-//     userId: req.user._id,
-//     requestId: req.requestId
-//   });
-
-//   res.status(StatusCodes.CREATED).json({ status: "success", message: "Successfully! created", gigData });
-// });
-
 
 /**
  * @function getGig
@@ -319,7 +223,13 @@ export const getGig = catchAsync(async (req, res) => {
  */
 export const nearByGig = catchAsync(async (req, res) => {
   const { latitude, longitude } = req.params;
-  const cacheKey = `gigs_nearby_${latitude}_${longitude}`;
+  if (!latitude || !longitude) {
+    return res.status(StatusCodes.BAD_REQUEST).json({ message: "Latitude and Longitude are required" });
+  }
+  const gridLat = Math.floor(latitude * 10) / 10;
+  const gridLng = Math.floor(longitude * 10) / 10;
+
+  const cacheKey = `gigs_nearby_${gridLat}_${gridLng}`;
 
   const result = await getOrSetCache(cacheKey, async () => {
     const nearByUser = await User.aggregate([
@@ -344,10 +254,13 @@ export const nearByGig = catchAsync(async (req, res) => {
         "postedBy",
         "username email profilePic onlineStatus can_review skills address location"
       )
+      .limit(8)
+      .lean()
       .exec();
 
     return { nearByGigs };
-  }, 300); // 5 minute TTL for location-based gigs
+  }, 60);
+
   logger.info('Nearby gigs retrieved', {
     latitude,
     longitude,
@@ -450,7 +363,8 @@ export const searchGig = catchAsync(async (req, res) => {
       currentPage: page,
       totalPages: Math.ceil(totalGigs / limit),
     };
-  }, 180); // 3 minute TTL for search results
+  }, 180);
+
   logger.info('Gig search completed', {
     text,
     category,
@@ -458,7 +372,7 @@ export const searchGig = catchAsync(async (req, res) => {
     userId: req.user?._id,
     requestId: req.requestId
   });
-  res.status(200).json(result);
+  res.status(StatusCodes.OK).json(result);
 });
 
 
@@ -502,6 +416,10 @@ export const getSingleUserGigs = catchAsync(async (req, res) => {
 export const deleteSingleGig = catchAsync(async (req, res) => {
   const { id } = req.params;
 
+  if (!id) {
+    return res.status(StatusCodes.NOT_FOUND).json({ messge: "Something went wrong: " })
+  }
+
   const gig = await Gig.findById(id);
 
   if (!gig) {
@@ -525,17 +443,23 @@ export const deleteSingleGig = catchAsync(async (req, res) => {
 
   await gig.deleteOne();
 
-  // Clear related caches
   clearCache([
     'gigs_all_1_10',
     `user_gigs_${gig.postedBy}`,
   ]);
+
+  const gridLat = Math.floor(gig.postedBy.address.coordinates[1] * 10) / 10;
+  const gridLng = Math.floor(gig.postedBy.address.coordinates[0] * 10) / 10;
+
+  clearNearbyGigCacheGrid(gridLat, gridLng);
+
+
   logger.info('Gig deleted successfully', {
     gigId: gig._id,
     userId: req.user._id,
     requestId: req.requestId
   });
-  res.status(200).json({ message: "Gig deleted successfully" });
+  res.status(StatusCodes.OK).json({ message: "Gig deleted successfully" });
 
 });
 
@@ -547,6 +471,10 @@ export const deleteSingleGig = catchAsync(async (req, res) => {
 
 export const getSingleGig = catchAsync(async (req, res) => {
   const { gigId } = req.params;
+
+  if (!gigId) {
+    return res.status(StatusCodes.NOT_FOUND).json({ message: "Something went wrong: Gig not found" });
+  }
   const cacheKey = `single_gig_${gigId}`;
 
   const result = await getOrSetCache(cacheKey, async () => {
@@ -570,14 +498,14 @@ export const getSingleGig = catchAsync(async (req, res) => {
       userId: req.user?._id,
       requestId: req.requestId
     });
-    return res.status(404).json({ message: "Gig not found" });
+    return res.status(StatusCodes.NOT_FOUND).json({ message: "Gig not found" });
   }
   logger.info('Gig retrieved successfully', {
     gigId,
     userId: req.user?._id,
     requestId: req.requestId
   });
-  res.status(200).json({
+  res.status(StatusCodes.OK).json({
     success: true,
     gig: result,
   });
