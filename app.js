@@ -176,6 +176,10 @@ app.use(responseTime((req, res, time) => {
   }).observe(time)
 }))
 
+app.get('/api/v1/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 /**
  * All routing included
  * (user, auth, job, Gig, Message, Admin, Payment, Review, Notification, Report)
