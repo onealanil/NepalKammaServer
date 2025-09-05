@@ -54,7 +54,7 @@ router.route(`/`).get(normalLimiter, protect, getJob);
  * @route GET /api/v1/
  * @access Private
  */
-router.route(`/getSingleUserJob/:id`).get(normalLimiter, protect, getSingleUserJobs);
+router.route(`/getSingleUserJob/:id`).get(normalLimiter, protect, permission(["job_provider"]) ,getSingleUserJobs);
 
 /**
  * @description This route is used to get the nearby jobs based on latitude and longitude.

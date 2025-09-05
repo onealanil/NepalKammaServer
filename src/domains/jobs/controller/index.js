@@ -403,7 +403,6 @@ export const recommendationJobs = catchAsync(async (req, res) => {
   const cacheKey = `recommendations_${id}`;
 
   const result = await getOrSetCache(cacheKey, async () => {
-    // Get recommendations with metadata from your enhanced algorithm
     const recommendJobsList = await recommendJobs(id);
 
     if (recommendJobsList.length === 0) {

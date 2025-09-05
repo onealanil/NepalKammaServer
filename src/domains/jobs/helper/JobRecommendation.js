@@ -180,7 +180,6 @@ const calculateSkillMatch = (userSkills, jobSkills) => {
 };
 
 /**
- * Enhanced category matching that works with your category structure
  * @param {string} userTitle - User's title/profession
  * @param {Array} userSkills - User's skills
  * @param {string} jobTitle - Job title
