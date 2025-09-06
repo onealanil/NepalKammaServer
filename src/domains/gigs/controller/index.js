@@ -168,7 +168,7 @@ export const createGigWithImages = catchAsync(async (req, res) => {
 
 /**
  * @function getGig
- * @description Get all gigs from the database.
+ * @description Get all gigs from the database with pagination limit.
  * @param {Object} req - The request object.
  * @param {Object} res - The response object to send the response.
  * @returns - A JSON response with a success message and the list of gigs.
@@ -177,40 +177,54 @@ export const createGigWithImages = catchAsync(async (req, res) => {
  */
 export const getGig = catchAsync(async (req, res) => {
   const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
+  let limit = parseInt(req.query.limit) || 5;
+
+  const MAX_LIMIT_PER_PAGE = 5;
+  const MAX_TOTAL_ITEMS = 10;
+
+  limit = Math.min(limit, MAX_LIMIT_PER_PAGE);
+
   const cacheKey = `gigs_all_${page}_${limit}`;
 
   const result = await getOrSetCache(cacheKey, async () => {
+    const skip = (page - 1) * limit;
+
+    const remainingItems = Math.max(0, MAX_TOTAL_ITEMS - skip);
+    const actualLimit = Math.min(limit, remainingItems);
+
     const gigs = await Gig.find()
       .sort({ createdAt: -1 })
       .populate(
         "postedBy",
         "username email profilePic onlineStatus can_review skills address location"
       )
-      .skip((page - 1) * limit)
-      .limit(limit)
+      .skip(skip)
+      .limit(actualLimit)
       .exec();
 
-    const totalGigs = await Gig.countDocuments();
+    const totalGigsInDB = await Gig.countDocuments();
+    const displayTotalGigs = Math.min(totalGigsInDB, MAX_TOTAL_ITEMS);
+    const actualTotalPages = Math.ceil(displayTotalGigs / limit);
 
     return {
       gig: gigs,
-      totalGigs,
-      totalPages: Math.ceil(totalGigs / limit),
+      totalGigs: displayTotalGigs,
+      totalPages: actualTotalPages, 
       currentPage: page
     };
   });
 
   logger.info('Gigs retrieved', {
     page,
-    gigCount: result.totalGigs,
+    limit,
+    gigCount: result.gig?.length || 0,
+    totalDisplayed: result.totalGigs,
     userId: req.user?._id,
     requestId: req.requestId
   });
 
   res.status(StatusCodes.OK).json(result);
 });
-
 
 /**
  * @function nearByGig
@@ -254,7 +268,7 @@ export const nearByGig = catchAsync(async (req, res) => {
         "postedBy",
         "username email profilePic onlineStatus can_review skills address location"
       )
-      .limit(8)
+      .limit(5)
       .lean()
       .exec();
 
