@@ -572,7 +572,7 @@ export const getUserGrowth = catchAsync(async (req, res) => {
     requestId: req.requestId
   });
 
-  res.status(200).json({ userGrowthData: response });
+  res.status(StatusCodes.OK).json({ userGrowthData: response });
 });
 
 //send push notification to all users
@@ -606,10 +606,10 @@ export const sendPushNotification = catchAsync(async (req, res) => {
         sendPushNotification(user);
       }
     });
-    res.status(200).json({ message: "Push notification sent successfully" });
+    res.status(StatusCodes.OK).json({ message: "Push notification sent successfully" });
   } catch (err) {
     logger.error(err);
-    res.status(500).json({ message: "Failed to send push notification" });
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: "Failed to send push notification" });
   }
 });
 
@@ -702,9 +702,9 @@ export const getNewUsers = catchAsync(async (req, res) => {
       });
     });
 
-    return res.status(200).json({ users: finalResults });
+    return res.status(StatusCodes.OK).json({ users: finalResults });
 
   } catch (err) {
-    res.status(500).json({ message: "Failed to get new users" });
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: "Failed to get new users" });
   }
 });
